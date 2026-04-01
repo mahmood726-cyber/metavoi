@@ -1,0 +1,25 @@
+{
+  "name": "BCG Vaccine (Colditz et al. 1994)",
+  "description": "13 RCTs of BCG vaccine efficacy against tuberculosis",
+  "measure": "logRR",
+  "studies": [
+    {"yi": -0.8893, "vi": 0.0180, "label": "Aronson 1948"},
+    {"yi": -1.5856, "vi": 0.0092, "label": "Ferguson & Simes 1949"},
+    {"yi": -1.3481, "vi": 0.0127, "label": "Rosenthal 1960"},
+    {"yi": -1.4416, "vi": 0.0207, "label": "Hart & Sutherland 1977"},
+    {"yi": -0.2175, "vi": 0.0502, "label": "Frimodt-Moller 1973"},
+    {"yi": -0.7861, "vi": 0.0276, "label": "Stein & Aronson 1953"},
+    {"yi": -1.6209, "vi": 0.1781, "label": "Vandiviere 1973"},
+    {"yi": 0.0120, "vi": 0.0078, "label": "TPT Madras 1980"},
+    {"yi": -0.4694, "vi": 0.0552, "label": "Coetzee & Berjak 1968"},
+    {"yi": -1.3713, "vi": 0.0633, "label": "Rosenthal 1961"},
+    {"yi": -0.3394, "vi": 0.0175, "label": "Comstock et al. 1974"},
+    {"yi": -0.2507, "vi": 0.0301, "label": "Comstock & Webster 1969"},
+    {"yi": -0.1538, "vi": 0.0441, "label": "Comstock 1976"}
+  ],
+  "mcid": -0.2,
+  "population": 1000000,
+  "horizon_years": 20,
+  "cost_per_patient": 500,
+  "discount_rate": 0.035
+}

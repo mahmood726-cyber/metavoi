@@ -1,0 +1,16 @@
+{
+  "name": "SGLT2i in Heart Failure",
+  "description": "Landmark SGLT2 inhibitor trials in HFrEF",
+  "measure": "logHR",
+  "studies": [
+    {"yi": -0.30, "vi": 0.008, "label": "DAPA-HF"},
+    {"yi": -0.25, "vi": 0.009, "label": "EMPEROR-Reduced"},
+    {"yi": -0.33, "vi": 0.012, "label": "DELIVER"},
+    {"yi": -0.28, "vi": 0.010, "label": "SOLOIST-WHF"}
+  ],
+  "mcid": -0.15,
+  "population": 500000,
+  "horizon_years": 5,
+  "cost_per_patient": 8000,
+  "discount_rate": 0.035
+}

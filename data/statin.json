@@ -1,0 +1,17 @@
+{
+  "name": "Statins for Primary CV Prevention",
+  "description": "Major RCTs of statin therapy in primary prevention",
+  "measure": "logOR",
+  "studies": [
+    {"yi": -0.31, "vi": 0.012, "label": "WOSCOPS"},
+    {"yi": -0.25, "vi": 0.018, "label": "AFCAPS"},
+    {"yi": -0.19, "vi": 0.015, "label": "ASCOT-LLA"},
+    {"yi": -0.28, "vi": 0.022, "label": "JUPITER"},
+    {"yi": -0.22, "vi": 0.020, "label": "HOPE-3"}
+  ],
+  "mcid": -0.1,
+  "population": 10000000,
+  "horizon_years": 10,
+  "cost_per_patient": 2000,
+  "discount_rate": 0.035
+}
