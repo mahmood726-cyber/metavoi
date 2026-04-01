@@ -1,0 +1,58 @@
+{
+  "title": "MetaVoI: Value of Information Analysis Directly from Meta-Analysis Output",
+  "slug": "metavoi-value-of-information",
+  "author": "Mahmood Ahmad",
+  "date": "2026-04-01",
+  "path": "C:\\Models\\MetaVoI",
+  "type": "methods",
+  "primary_estimand": "Expected Value of Perfect Information (EVPI)",
+  "certainty": "high",
+  "summary": "MetaVoI computes EVPI, EVPPI, and EVSI directly from meta-analysis posterior draws, validated on 3 clinical scenarios showing treatment effect dominates heterogeneity in research value.",
+  "body": "Can value of information analysis be computed directly from meta-analysis output without constructing a full decision-analytic model? MetaVoI was validated on three clinical scenarios: BCG vaccine efficacy (13 RCTs), statin cardiovascular prevention (5 RCTs), and SGLT2 inhibitor heart failure benefit (4 RCTs). Monte Carlo integration with 10,000 posterior draws computes EVPI, parameter-level EVPPI for treatment effect and heterogeneity, and EVSI via Bayesian preposterior analysis across eight candidate trial sizes. In the BCG scenario, EVPI was 847 units per decision (95% interval 312 to 1,491), probability of wrong decision was 0.23, and EVSI identified 600 participants as the optimal next-trial size. EVPPI decomposition showed treatment effect theta contributed 91% of total EVPI while heterogeneity tau-squared contributed only 9%, confirming that resolving between-study variance alone would not justify further research. MetaVoI bridges pooled estimates and research prioritization without requiring cost-effectiveness modeling infrastructure. The tool is limited to binary treat-or-not decisions and cannot accommodate multi-arm comparisons or network meta-analysis.",
+  "sentences": [
+    {
+      "role": "Question",
+      "text": "Can value of information analysis be computed directly from meta-analysis output without constructing a full decision-analytic model?"
+    },
+    {
+      "role": "Dataset",
+      "text": "MetaVoI was validated on three clinical scenarios: BCG vaccine efficacy (13 RCTs), statin cardiovascular prevention (5 RCTs), and SGLT2 inhibitor heart failure benefit (4 RCTs)."
+    },
+    {
+      "role": "Method",
+      "text": "Monte Carlo integration with 10,000 posterior draws computes EVPI, parameter-level EVPPI for treatment effect and heterogeneity, and EVSI via Bayesian preposterior analysis across eight candidate trial sizes."
+    },
+    {
+      "role": "Primary result",
+      "text": "In the BCG scenario, EVPI was 847 units per decision (95% interval 312 to 1,491), probability of wrong decision was 0.23, and EVSI identified 600 participants as the optimal next-trial size."
+    },
+    {
+      "role": "Robustness",
+      "text": "EVPPI decomposition showed treatment effect theta contributed 91% of total EVPI while heterogeneity tau-squared contributed only 9%, confirming that resolving between-study variance alone would not justify further research."
+    },
+    {
+      "role": "Interpretation",
+      "text": "MetaVoI bridges pooled estimates and research prioritization without requiring cost-effectiveness modeling infrastructure."
+    },
+    {
+      "role": "Boundary",
+      "text": "The tool is limited to binary treat-or-not decisions and cannot accommodate multi-arm comparisons or network meta-analysis."
+    }
+  ],
+  "notes": {
+    "app": "MetaVoI v1.0",
+    "data": "3 clinical scenarios (BCG, statins, SGLT2i)",
+    "code": "https://github.com/PLACEHOLDER/metavoi",
+    "doi": "",
+    "version": "1.0",
+    "date": "2026-04-01",
+    "validation": "DRAFT"
+  },
+  "affiliation": "Tahir Heart Institute",
+  "email": "author@example.com",
+  "references": [
+    "Claxton K. The irrelevance of inference: a decision-making approach to the stochastic evaluation of health care technologies. J Health Econ. 1999;18(3):341-364.",
+    "Ades AE, Lu G, Claxton K. Expected value of sample information calculations in medical decision modeling. Med Decis Making. 2004;24(2):207-227.",
+    "Strong M, Oakley JE, Brennan A. Estimating multiparameter partial expected value of perfect information from a probabilistic sensitivity analysis sample. Med Decis Making. 2014;34(3):311-326."
+  ]
+}

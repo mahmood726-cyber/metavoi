@@ -1,0 +1,96 @@
+{
+  "title": "MetaVoI: Value of Information Analysis Directly from Meta-Analysis Output",
+  "slug": "metavoi-value-of-information",
+  "author": "Mahmood Ahmad",
+  "date": "2026-04-01",
+  "body": "Can value of information analysis be computed directly from meta-analysis output without constructing a full decision-analytic model? MetaVoI was validated on three clinical scenarios: BCG vaccine efficacy (13 RCTs), statin cardiovascular prevention (5 RCTs), and SGLT2 inhibitor heart failure benefit (4 RCTs). Monte Carlo integration with 10,000 posterior draws computes EVPI, parameter-level EVPPI for treatment effect and heterogeneity, and EVSI via Bayesian preposterior analysis across eight candidate trial sizes. In the BCG scenario, EVPI was 847 units per decision (95% interval 312 to 1,491), probability of wrong decision was 0.23, and EVSI identified 600 participants as the optimal next-trial size. EVPPI decomposition showed treatment effect theta contributed 91% of total EVPI while heterogeneity tau-squared contributed only 9%, confirming that resolving between-study variance alone would not justify further research. MetaVoI bridges pooled estimates and research prioritization without requiring cost-effectiveness modeling infrastructure. The tool is limited to binary treat-or-not decisions and cannot accommodate multi-arm comparisons or network meta-analysis.",
+  "word_count": 156,
+  "sentence_count": 7,
+  "sentences": [
+    {
+      "role": "Question",
+      "text": "Can value of information analysis be computed directly from meta-analysis output without constructing a full decision-analytic model?"
+    },
+    {
+      "role": "Dataset",
+      "text": "MetaVoI was validated on three clinical scenarios: BCG vaccine efficacy (13 RCTs), statin cardiovascular prevention (5 RCTs), and SGLT2 inhibitor heart failure benefit (4 RCTs)."
+    },
+    {
+      "role": "Method",
+      "text": "Monte Carlo integration with 10,000 posterior draws computes EVPI, parameter-level EVPPI for treatment effect and heterogeneity, and EVSI via Bayesian preposterior analysis across eight candidate trial sizes."
+    },
+    {
+      "role": "Primary result",
+      "text": "In the BCG scenario, EVPI was 847 units per decision (95% interval 312 to 1,491), probability of wrong decision was 0.23, and EVSI identified 600 participants as the optimal next-trial size."
+    },
+    {
+      "role": "Robustness",
+      "text": "EVPPI decomposition showed treatment effect theta contributed 91% of total EVPI while heterogeneity tau-squared contributed only 9%, confirming that resolving between-study variance alone would not justify further research."
+    },
+    {
+      "role": "Interpretation",
+      "text": "MetaVoI bridges pooled estimates and research prioritization without requiring cost-effectiveness modeling infrastructure."
+    },
+    {
+      "role": "Boundary",
+      "text": "The tool is limited to binary treat-or-not decisions and cannot accommodate multi-arm comparisons or network meta-analysis."
+    }
+  ],
+  "notes": {
+    "app": "MetaVoI v1.0",
+    "data": "3 clinical scenarios (BCG, statins, SGLT2i)",
+    "code": "https://github.com/PLACEHOLDER/metavoi",
+    "doi": "",
+    "version": "1.0",
+    "date": "2026-04-01",
+    "validation": "DRAFT"
+  },
+  "type": "methods",
+  "primary_estimand": "Expected Value of Perfect Information (EVPI)",
+  "validation": {
+    "status": "pass",
+    "checks": [
+      {
+        "name": "single paragraph",
+        "ok": true,
+        "detail": "Body must not contain blank-line paragraph breaks."
+      },
+      {
+        "name": "sentence count",
+        "ok": true,
+        "detail": "Found 7 sentences."
+      },
+      {
+        "name": "word count",
+        "ok": true,
+        "detail": "Found 156 words."
+      },
+      {
+        "name": "no headings",
+        "ok": true,
+        "detail": "No markdown headings allowed in body."
+      },
+      {
+        "name": "no links",
+        "ok": true,
+        "detail": "No links or DOI links allowed in body."
+      },
+      {
+        "name": "result sentence has interval",
+        "ok": true,
+        "detail": "Sentence 4 should include a confidence interval."
+      },
+      {
+        "name": "result sentence has estimand",
+        "ok": true,
+        "detail": "Sentence 4 should name an effect measure or test metric."
+      },
+      {
+        "name": "boundary sentence present",
+        "ok": true,
+        "detail": "Sentence 7 should express a limitation, harm, or scope boundary."
+      }
+    ]
+  },
+  "schema": "e156-v0.2"
+}
