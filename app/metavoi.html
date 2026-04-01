@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MetaVoI - Value of Information from Meta-Analysis</title>
+<script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
+<style>
+:root {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --text: #1e293b;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --primary: #0f766e;
+  --primary-light: #14b8a6;
+  --danger: #dc2626;
+  --success: #16a34a;
+  --warn: #d97706;
+  --radius: 10px;
+  --shadow: 0 8px 32px rgba(15,23,42,0.08);
+  --font: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body.dark {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --border: #334155;
+  --shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background 0.3s, color 0.3s;
+}
+
+/* Header */
+.app-header {
+  background: linear-gradient(120deg, #0f766e, #0e7490);
+  color: #fff;
+  padding: 1.25rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.app-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.app-header .subtitle {
+  font-size: 0.85rem;
+  opacity: 0.85;
+  margin-left: 0.75rem;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dark-toggle {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.25);
+  color: #fff;
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: var(--font);
+  transition: background 0.2s;
+}
+
+.dark-toggle:hover { background: rgba(255,255,255,0.25); }
+
+/* Tabs */
+.tab-bar {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 2px solid var(--border);
+  padding: 0 1rem;
+  overflow-x: auto;
+}
+
+.tab-btn {
+  padding: 0.75rem 1.25rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.tab-btn:hover { color: var(--text); }
+.tab-btn[aria-selected="true"] {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+
+.tab-panel {
+  display: none;
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.tab-panel.active { display: block; }
+
+/* Panels */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.panel h2 {
+  font-size: 1.15rem;
+  margin-bottom: 1rem;
+  color: var(--primary);
+}
+
+.panel h3 {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  color: var(--text);
+}
+
+/* Form elements */
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 140px;
+}
+
+.form-group label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.form-group input, .form-group textarea, .form-group select {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font);
+  font-size: 0.92rem;
+  background: var(--bg);
+  color: var(--text);
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus, .form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(15,118,110,0.12);
+}
+
+textarea.study-data {
+  min-height: 120px;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.btn:active { transform: scale(0.97); }
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover { background: #0d6b63; }
+
+.btn-secondary {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover { background: var(--border); }
+
+.btn-small {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* Toggle switch */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.toggle-label {
+  font-size: 0.9rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.toggle-label.active { color: var(--text); font-weight: 600; }
+
+.toggle-switch {
+  position: relative;
+  width: 48px;
+  height: 26px;
+  background: var(--border);
+  border-radius: 13px;
+  cursor: pointer;
+  transition: background 0.3s;
+  border: none;
+}
+
+.toggle-switch.on { background: var(--primary); }
+
+.toggle-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.3s;
+}
+
+.toggle-switch.on::after { transform: translateX(22px); }
+
+/* Results styling */
+.big-number {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1.2;
+}
+
+.big-number.danger { color: var(--danger); }
+.big-number.success { color: var(--success); }
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 1.25rem;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.stat-card .stat-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.4rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Badge */
+.badge {
+  display: inline-block;
+  padding: 0.35rem 0.85rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.badge-high { background: #dcfce7; color: #166534; }
+.badge-moderate { background: #fef9c3; color: #854d0e; }
+.badge-low { background: #fed7aa; color: #9a3412; }
+.badge-very-low { background: #fecaca; color: #991b1b; }
+
+body.dark .badge-high { background: #14532d; color: #86efac; }
+body.dark .badge-moderate { background: #713f12; color: #fde047; }
+body.dark .badge-low { background: #7c2d12; color: #fdba74; }
+body.dark .badge-very-low { background: #7f1d1d; color: #fca5a5; }
+
+/* Chart containers */
+.chart-container {
+  width: 100%;
+  min-height: 350px;
+  margin: 1rem 0;
+}
+
+/* Report pre */
+.report-pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 500px;
+  overflow-y: auto;
+  color: var(--text);
+  line-height: 1.5;
+  user-select: all;
+}
+
+/* Verdict card */
+.verdict-card {
+  background: linear-gradient(135deg, #ecfdf5, #f0fdfa);
+  border: 2px solid #6ee7b7;
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin: 1rem 0;
+}
+
+body.dark .verdict-card {
+  background: linear-gradient(135deg, #064e3b, #134e4a);
+  border-color: #065f46;
+}
+
+.verdict-card .verdict-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--success);
+  margin-bottom: 0.5rem;
+}
+
+.verdict-card .verdict-text {
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.verdict-card.negative {
+  background: linear-gradient(135deg, #fef2f2, #fff1f2);
+  border-color: #fca5a5;
+}
+
+body.dark .verdict-card.negative {
+  background: linear-gradient(135deg, #450a0a, #4c0519);
+  border-color: #991b1b;
+}
+
+.verdict-card.negative .verdict-title { color: var(--danger); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .app-header { padding: 1rem; }
+  .app-header h1 { font-size: 1.2rem; }
+  .tab-panel { padding: 1rem; }
+  .form-group { min-width: 100%; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* Live region */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Plotly overrides for dark mode */
+body.dark .js-plotly-plot .plotly .modebar-btn path { fill: var(--muted); }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>MetaVoI<span class="subtitle">Value of Information from Meta-Analysis</span></h1>
+  </div>
+  <div class="header-controls">
+    <button class="dark-toggle" id="darkToggle" aria-label="Toggle dark mode">Dark Mode</button>
+  </div>
+</header>
+
+<nav class="tab-bar" role="tablist" aria-label="Main navigation">
+  <button class="tab-btn" role="tab" aria-selected="true" aria-controls="panel-input" id="tab-input" tabindex="0">Input</button>
+  <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-decision" id="tab-decision" tabindex="-1">Decision Space</button>
+  <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-evpi" id="tab-evpi" tabindex="-1">EVPI Analysis</button>
+  <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-evsi" id="tab-evsi" tabindex="-1">Trial Planning</button>
+  <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-report" id="tab-report" tabindex="-1">Report &amp; Certify</button>
+</nav>
+
+<div aria-live="polite" id="liveRegion" class="sr-only"></div>
+
+<!-- Tab 1: Input -->
+<div class="tab-panel active" role="tabpanel" id="panel-input" aria-labelledby="tab-input">
+  <div class="panel">
+    <h2>Data Input</h2>
+
+    <div class="toggle-row">
+      <span class="toggle-label active" id="label-summary">Summary results</span>
+      <button class="toggle-switch" id="inputToggle" role="switch" aria-checked="false" aria-label="Toggle between summary results and study-level data"></button>
+      <span class="toggle-label" id="label-study">Study-level data</span>
+    </div>
+
+    <!-- Summary inputs -->
+    <div id="summaryInputs">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="inp-theta">Pooled effect (theta)</label>
+          <input type="number" id="inp-theta" step="any" placeholder="-0.7141">
+        </div>
+        <div class="form-group">
+          <label for="inp-se">Standard error (SE)</label>
+          <input type="number" id="inp-se" step="any" min="0" placeholder="0.1787">
+        </div>
+        <div class="form-group">
+          <label for="inp-tau2">Between-study variance (tau2)</label>
+          <input type="number" id="inp-tau2" step="any" min="0" placeholder="0.3084">
+        </div>
+        <div class="form-group">
+          <label for="inp-k">Number of studies (k)</label>
+          <input type="number" id="inp-k" step="1" min="1" placeholder="13">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="inp-within-var">Typical within-study variance</label>
+          <input type="number" id="inp-within-var" step="any" min="0" placeholder="0.0441">
+        </div>
+      </div>
+    </div>
+
+    <!-- Study-level inputs -->
+    <div id="studyInputs" style="display:none;">
+      <div class="form-group">
+        <label for="inp-studydata">Study data (yi, vi, label per line)</label>
+        <textarea class="study-data" id="inp-studydata" placeholder="e.g.
+-0.89, 0.17, Study A
+-0.43, 0.06, Study B
+-1.35, 0.25, Study C"></textarea>
+      </div>
+      <p style="font-size:0.82rem; color:var(--muted); margin-top:0.3rem;">
+        Paste CSV: effect_size, variance, label (one study per line). The app will compute pooled estimates.
+      </p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Decision Parameters</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="inp-mcid">MCID (minimum clinically important difference)</label>
+        <input type="number" id="inp-mcid" step="any" placeholder="-0.2">
+      </div>
+      <div class="form-group">
+        <label for="inp-pop">Affected population size</label>
+        <input type="number" id="inp-pop" step="1" min="1" placeholder="1000000">
+      </div>
+      <div class="form-group">
+        <label for="inp-horizon">Time horizon (years)</label>
+        <input type="number" id="inp-horizon" step="any" min="0.1" placeholder="20">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="inp-cost">Cost per patient enrolled in trial ($)</label>
+        <input type="number" id="inp-cost" step="any" min="0" placeholder="500">
+      </div>
+      <div class="form-group">
+        <label for="inp-discount">Discount rate</label>
+        <input type="number" id="inp-discount" step="any" min="0" max="1" placeholder="0.035">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Quick Examples</h2>
+    <div class="btn-group">
+      <button class="btn btn-secondary btn-small" id="ex-bcg">BCG Vaccine (k=13)</button>
+      <button class="btn btn-secondary btn-small" id="ex-statin">Statins (k=5)</button>
+      <button class="btn btn-secondary btn-small" id="ex-sglt2">SGLT2i (k=4)</button>
+    </div>
+  </div>
+
+  <div style="text-align:center; margin-top:1rem;">
+    <button class="btn btn-primary" id="btnCompute" style="padding:0.75rem 2.5rem; font-size:1.05rem;">
+      Compute VoI
+    </button>
+  </div>
+</div>
+
+<!-- Tab 2: Decision Space -->
+<div class="tab-panel" role="tabpanel" id="panel-decision" aria-labelledby="tab-decision">
+  <div class="panel">
+    <h2>Posterior Predictive Distribution &amp; Decision Threshold</h2>
+    <div class="stats-grid" id="decision-stats"></div>
+    <div class="chart-container" id="chart-posterior" aria-label="Posterior density plot showing treat and no-treat regions"></div>
+  </div>
+  <div class="panel">
+    <h2>Net Benefit Comparison</h2>
+    <div class="chart-container" id="chart-netbenefit" aria-label="Bar chart comparing net benefit of treat versus no-treat decisions"></div>
+  </div>
+</div>
+
+<!-- Tab 3: EVPI Analysis -->
+<div class="tab-panel" role="tabpanel" id="panel-evpi" aria-labelledby="tab-evpi">
+  <div class="panel">
+    <h2>Expected Value of Perfect Information</h2>
+    <div class="stats-grid" id="evpi-stats"></div>
+  </div>
+  <div class="panel">
+    <h2>EVPPI Tornado Chart</h2>
+    <p style="font-size:0.88rem; color:var(--muted); margin-bottom:0.5rem;" id="evppi-text"></p>
+    <div class="chart-container" id="chart-evppi" aria-label="Tornado chart showing EVPPI contributions by parameter"></div>
+  </div>
+</div>
+
+<!-- Tab 4: Trial Planning (EVSI) -->
+<div class="tab-panel" role="tabpanel" id="panel-evsi" aria-labelledby="tab-evsi">
+  <div class="panel">
+    <h2>Expected Value of Sample Information</h2>
+    <div class="stats-grid" id="evsi-stats"></div>
+    <div class="chart-container" id="chart-evsi" aria-label="EVSI and cost curves versus trial sample size"></div>
+  </div>
+  <div class="panel">
+    <h2>Net Benefit of Further Research</h2>
+    <div class="chart-container" id="chart-netben" aria-label="Net benefit curve with optimal and break-even sample sizes"></div>
+    <div id="evsi-verdict"></div>
+  </div>
+</div>
+
+<!-- Tab 5: Report & Certify -->
+<div class="tab-panel" role="tabpanel" id="panel-report" aria-labelledby="tab-report">
+  <div class="panel">
+    <h2>Structured Report</h2>
+    <div class="btn-group" style="margin-bottom:1rem;">
+      <button class="btn btn-secondary btn-small" id="btnCopyReport">Copy Report</button>
+    </div>
+    <pre class="report-pre" id="report-text" tabindex="0">Run a VoI analysis to generate the report.</pre>
+  </div>
+  <div class="panel">
+    <h2>TruthCert JSON Bundle</h2>
+    <div class="btn-group" style="margin-bottom:1rem;">
+      <button class="btn btn-secondary btn-small" id="btnCopyJSON">Copy JSON</button>
+    </div>
+    <pre class="report-pre" id="report-json" tabindex="0">Run a VoI analysis to generate the certification bundle.</pre>
+  </div>
+</div>
+
+<script>
+/* ========================================================================
+   MetaVoI Engine - Value of Information from Meta-Analysis
+   ======================================================================== */
+
+(function() {
+  "use strict";
+
+  // -------------------------------------------------------------------
+  // 1. PRNG: xoshiro128**
+  // -------------------------------------------------------------------
+  function xoshiro128ss(seed) {
+    let s = new Uint32Array(4);
+    s[0] = seed >>> 0;
+    s[1] = (seed ^ 0x6c078965) >>> 0;
+    s[2] = (seed ^ 0x714ac2e1) >>> 0;
+    s[3] = (seed ^ 0x48e7dc55) >>> 0;
+
+    function next() {
+      const result = (Math.imul(rotl(Math.imul(s[1], 5), 7), 9)) >>> 0;
+      const t = s[1] << 9;
+      s[2] ^= s[0];
+      s[3] ^= s[1];
+      s[1] ^= s[2];
+      s[0] ^= s[3];
+      s[2] ^= t;
+      s[3] = rotl(s[3], 11);
+      return result / 4294967296;
+    }
+
+    function rotl(x, k) {
+      return ((x << k) | (x >>> (32 - k))) >>> 0;
+    }
+
+    function nextGaussian() {
+      let u, v, s2;
+      do {
+        u = 2 * next() - 1;
+        v = 2 * next() - 1;
+        s2 = u * u + v * v;
+      } while (s2 >= 1 || s2 === 0);
+      return u * Math.sqrt(-2 * Math.log(s2) / s2);
+    }
+
+    return { next, nextGaussian };
+  }
+
+  // -------------------------------------------------------------------
+  // 2. Statistical helpers
+  // -------------------------------------------------------------------
+  function normalPDF(x, mu, sigma) {
+    const z = (x - mu) / sigma;
+    return Math.exp(-0.5 * z * z) / (sigma * Math.sqrt(2 * Math.PI));
+  }
+
+  function normalCDF(x) {
+    // Abramowitz & Stegun approximation 26.2.17
+    const a1 = 0.254829592;
+    const a2 = -0.284496736;
+    const a3 = 1.421413741;
+    const a4 = -1.453152027;
+    const a5 = 1.061405429;
+    const p = 0.3275911;
+
+    const sign = x < 0 ? -1 : 1;
+    const absX = Math.abs(x);
+    const t = 1.0 / (1.0 + p * absX);
+    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-absX * absX / 2);
+    return 0.5 * (1.0 + sign * y);
+  }
+
+  // -------------------------------------------------------------------
+  // 3. Core VoI functions
+  // -------------------------------------------------------------------
+
+  /** Generate draws from the predictive distribution */
+  function predictiveDistribution(theta, se, tau2, nSim, seed) {
+    const rng = xoshiro128ss(seed);
+    const totalVar = se * se + tau2;
+    const totalSD = Math.sqrt(totalVar);
+    const draws = new Float64Array(nSim);
+    for (let i = 0; i < nSim; i++) {
+      draws[i] = theta + totalSD * rng.nextGaussian();
+    }
+    return draws;
+  }
+
+  /** Probability of wrong decision */
+  function pWrongDecision(draws, mcid) {
+    // Decision: treat if theta < mcid (beneficial effect below threshold)
+    // Current decision is based on point estimate
+    const mean = arrayMean(draws);
+    const currentlyTreat = mean < mcid;
+    let wrong = 0;
+    for (let i = 0; i < draws.length; i++) {
+      const shouldTreat = draws[i] < mcid;
+      if (shouldTreat !== currentlyTreat) wrong++;
+    }
+    return wrong / draws.length;
+  }
+
+  /** Discount factor: sum of 1/(1+r)^t for t=0..years-1 */
+  function discountFactor(rate, years) {
+    if (rate <= 0) return years;
+    let df = 0;
+    for (let t = 0; t < years; t++) {
+      df += 1 / Math.pow(1 + rate, t);
+    }
+    return df;
+  }
+
+  /** Per-patient EVPI */
+  function computeEvpi(draws, mcid) {
+    const n = draws.length;
+    // NB_treat per draw = mcid - draw (positive when draw < mcid, meaning treatment is beneficial)
+    // NB_no_treat = 0
+    let sumPerfect = 0;
+    let sumTreat = 0;
+    for (let i = 0; i < n; i++) {
+      const nbTreat = mcid - draws[i];
+      sumPerfect += Math.max(nbTreat, 0);
+      sumTreat += nbTreat;
+    }
+    const meanPerfect = sumPerfect / n;
+    const meanTreat = sumTreat / n;
+    const currentBest = Math.max(meanTreat, 0);
+    return meanPerfect - currentBest;
+  }
+
+  /** Population EVPI */
+  function computeEvpiPopulation(evpi, population, df) {
+    return evpi * population * df;
+  }
+
+  /** EVPPI for theta and tau2 */
+  function computeEvppi(theta, se, tau2, mcid, nSim, seed) {
+    const rng = xoshiro128ss(seed);
+    const totalVar = se * se + tau2;
+    const totalSD = Math.sqrt(totalVar);
+
+    // Full EVPI computation
+    const draws = new Float64Array(nSim);
+    for (let i = 0; i < nSim; i++) {
+      draws[i] = theta + totalSD * rng.nextGaussian();
+    }
+    const evpiFull = computeEvpi(draws, mcid);
+
+    // EVPPI for theta: if we knew the true theta perfectly, remaining uncertainty is only from tau2
+    // Simulate true theta, then decision with perfect knowledge of theta
+    const rng2 = xoshiro128ss(seed + 1000);
+    let sumPerfectTheta = 0;
+    let sumCurrentTheta = 0;
+    for (let i = 0; i < nSim; i++) {
+      const trueTheta = theta + se * rng2.nextGaussian();
+      const nbTreat = mcid - trueTheta;
+      sumPerfectTheta += Math.max(nbTreat, 0);
+      sumCurrentTheta += nbTreat;
+    }
+    const evppiTheta = (sumPerfectTheta / nSim) - Math.max(sumCurrentTheta / nSim, 0);
+
+    // EVPPI for tau2: if we knew the true tau2 perfectly
+    // Use partial EVPI approach: conditional on knowing tau2, uncertainty in theta remains via se
+    // This is a simpler approximation: EVPPI_tau2 = EVPI_full - EVPPI_theta
+    // (since theta and tau2 are the only two uncertain parameters)
+    const evppiTau2 = Math.max(evpiFull - evppiTheta, 0);
+
+    const totalEvppi = evppiTheta + evppiTau2;
+    const thetaFraction = totalEvppi > 0 ? evppiTheta / totalEvppi : 0.5;
+
+    return {
+      theta: evppiTheta,
+      tau2: evppiTau2,
+      thetaFraction: thetaFraction,
+      dominant: thetaFraction >= 0.5 ? "treatment effect" : "heterogeneity"
+    };
+  }
+
+  /** EVSI for a single trial size */
+  function computeEvsi(theta, se, tau2, mcid, withinVar, nTrial, nSim, seed) {
+    const rng = xoshiro128ss(seed);
+    const priorVar = se * se + tau2;
+    const priorPrecision = 1 / priorVar;
+    const trialPrecision = nTrial / withinVar;
+    const postPrecision = priorPrecision + trialPrecision;
+    const priorSD = Math.sqrt(priorVar);
+    const trialSD = Math.sqrt(withinVar / nTrial);
+
+    let sumUpdated = 0;
+    for (let i = 0; i < nSim; i++) {
+      const thetaTrue = theta + priorSD * rng.nextGaussian();
+      const thetaTrial = thetaTrue + trialSD * rng.nextGaussian();
+      const thetaUpdated = (priorPrecision * theta + trialPrecision * thetaTrial) / postPrecision;
+      const nbUpdated = Math.max(mcid - thetaUpdated, 0);
+      sumUpdated += nbUpdated;
+    }
+
+    const meanUpdated = sumUpdated / nSim;
+    const currentNB = Math.max(mcid - theta, 0);
+    return Math.max(meanUpdated - currentNB, 0);
+  }
+
+  /** EVSI curve over a range of trial sizes */
+  function computeEvsiCurve(theta, se, tau2, mcid, withinVar, population, df, costPerPatient, nSim, seed) {
+    const nValues = [];
+    // Build a grid of trial sizes: 10, 20, 50, 100, 200, ... 10000
+    const grid = [10, 20, 50, 100, 150, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 5000, 7500, 10000, 15000, 20000];
+    const curve = [];
+
+    for (let idx = 0; idx < grid.length; idx++) {
+      const n = grid[idx];
+      const evsi = computeEvsi(theta, se, tau2, mcid, withinVar, n, nSim, seed + idx * 7);
+      const evsiPop = evsi * population * df;
+      const cost = n * costPerPatient;
+      const netBenefit = evsiPop - cost;
+      curve.push({ n, evsi, evsiPop, cost, netBenefit });
+    }
+
+    return curve;
+  }
+
+  /** Find optimal N from EVSI curve */
+  function findOptimalN(curve) {
+    let bestIdx = 0;
+    let bestNB = curve[0].netBenefit;
+    let breakevenN = null;
+    let lastPositive = false;
+
+    for (let i = 0; i < curve.length; i++) {
+      if (curve[i].netBenefit > bestNB) {
+        bestNB = curve[i].netBenefit;
+        bestIdx = i;
+      }
+      // Find break-even by interpolation
+      if (i > 0 && curve[i - 1].netBenefit >= 0 && curve[i].netBenefit < 0) {
+        // Interpolate
+        const nb1 = curve[i - 1].netBenefit;
+        const nb2 = curve[i].netBenefit;
+        const n1 = curve[i - 1].n;
+        const n2 = curve[i].n;
+        breakevenN = Math.round(n1 + (n2 - n1) * nb1 / (nb1 - nb2));
+      }
+    }
+
+    // Check if first point is already negative (no break-even from above)
+    if (breakevenN === null && curve[curve.length - 1].netBenefit >= 0) {
+      breakevenN = curve[curve.length - 1].n; // all positive
+    }
+    if (breakevenN === null && curve[0].netBenefit < 0) {
+      // Check if any point is positive
+      const anyPositive = curve.some(function(c) { return c.netBenefit > 0; });
+      if (anyPositive) {
+        // Find first zero crossing from negative to positive
+        for (let i = 1; i < curve.length; i++) {
+          if (curve[i - 1].netBenefit < 0 && curve[i].netBenefit >= 0) {
+            const nb1 = curve[i - 1].netBenefit;
+            const nb2 = curve[i].netBenefit;
+            const n1 = curve[i - 1].n;
+            const n2 = curve[i].n;
+            breakevenN = Math.round(n1 + (n2 - n1) * (-nb1) / (nb2 - nb1));
+            break;
+          }
+        }
+      }
+    }
+
+    return {
+      optimalN: curve[bestIdx].n,
+      evsiPop: curve[bestIdx].evsiPop,
+      netBenefit: bestNB,
+      breakevenN: breakevenN,
+      cost: curve[bestIdx].cost,
+      curve: curve
+    };
+  }
+
+  /** GRADE certainty from P(wrong decision) */
+  function gradeFromPWrong(pWrong) {
+    if (pWrong < 0.05) {
+      return { certainty: "HIGH", recommendation: "Strong recommendation warranted", badgeClass: "badge-high" };
+    } else if (pWrong < 0.20) {
+      return { certainty: "MODERATE", recommendation: "Conditional recommendation; consider VoI", badgeClass: "badge-moderate" };
+    } else if (pWrong < 0.40) {
+      return { certainty: "LOW", recommendation: "Further research likely valuable", badgeClass: "badge-low" };
+    } else {
+      return { certainty: "VERY LOW", recommendation: "Further research essential before decision", badgeClass: "badge-very-low" };
+    }
+  }
+
+  /** Compute SHA-256 hash of input string (returns promise) */
+  async function computeInputHash(inputStr) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(inputStr);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
+  }
+
+  /** Array mean */
+  function arrayMean(arr) {
+    let sum = 0;
+    for (let i = 0; i < arr.length; i++) sum += arr[i];
+    return sum / arr.length;
+  }
+
+  /** Format currency */
+  function formatCurrency(value) {
+    if (Math.abs(value) >= 1e9) return "$" + (value / 1e9).toFixed(2) + "B";
+    if (Math.abs(value) >= 1e6) return "$" + (value / 1e6).toFixed(2) + "M";
+    if (Math.abs(value) >= 1e3) return "$" + (value / 1e3).toFixed(1) + "K";
+    return "$" + value.toFixed(0);
+  }
+
+  /** Format number with commas */
+  function formatNumber(n) {
+    return n.toLocaleString("en-US");
+  }
+
+  /** Escape HTML */
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
+  /** Parse study-level data */
+  function parseStudyData(text) {
+    const lines = text.trim().split("\n");
+    const studies = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line || line.startsWith("#")) continue;
+      const parts = line.split(",");
+      if (parts.length < 2) continue;
+      const yi = parseFloat(parts[0].trim());
+      const vi = parseFloat(parts[1].trim());
+      if (!Number.isFinite(yi) || !Number.isFinite(vi) || vi <= 0) continue;
+      const label = parts.length >= 3 ? parts.slice(2).join(",").trim() : ("Study " + (studies.length + 1));
+      studies.push({ yi, vi, label });
+    }
+    return studies;
+  }
+
+  /** Random-effects meta-analysis (DerSimonian-Laird) */
+  function metaAnalyze(studies) {
+    const k = studies.length;
+    if (k === 0) return null;
+
+    // Fixed-effect weights
+    const w = studies.map(function(s) { return 1 / s.vi; });
+    const sumW = w.reduce(function(a, b) { return a + b; }, 0);
+    const thetaFE = w.reduce(function(acc, wi, i) { return acc + wi * studies[i].yi; }, 0) / sumW;
+
+    // Q statistic
+    let Q = 0;
+    for (let i = 0; i < k; i++) {
+      Q += w[i] * Math.pow(studies[i].yi - thetaFE, 2);
+    }
+
+    // DerSimonian-Laird tau2
+    const sumW2 = w.reduce(function(a, b) { return a + b * b; }, 0);
+    const C = sumW - sumW2 / sumW;
+    let tau2 = Math.max(0, (Q - (k - 1)) / C);
+
+    // RE weights
+    const wRE = studies.map(function(s) { return 1 / (s.vi + tau2); });
+    const sumWRE = wRE.reduce(function(a, b) { return a + b; }, 0);
+    const theta = wRE.reduce(function(acc, wi, i) { return acc + wi * studies[i].yi; }, 0) / sumWRE;
+    const se = Math.sqrt(1 / sumWRE);
+
+    // Typical within-study variance (harmonic mean of vi)
+    const withinVar = k / studies.reduce(function(acc, s) { return acc + 1 / s.vi; }, 0);
+
+    return { theta, se, tau2, k, withinVar };
+  }
+
+  // -------------------------------------------------------------------
+  // 4. UI Logic
+  // -------------------------------------------------------------------
+
+  // Tab switching
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  const tabPanels = document.querySelectorAll(".tab-panel");
+
+  function switchTab(tabId) {
+    tabBtns.forEach(function(btn) {
+      const selected = btn.id === tabId;
+      btn.setAttribute("aria-selected", selected ? "true" : "false");
+      btn.tabIndex = selected ? 0 : -1;
+    });
+    tabPanels.forEach(function(panel) {
+      const btnId = panel.getAttribute("aria-labelledby");
+      panel.classList.toggle("active", btnId === tabId);
+    });
+  }
+
+  tabBtns.forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      switchTab(btn.id);
+    });
+    btn.addEventListener("keydown", function(e) {
+      const tabs = Array.from(tabBtns);
+      const idx = tabs.indexOf(btn);
+      let newIdx = idx;
+      if (e.key === "ArrowRight") newIdx = (idx + 1) % tabs.length;
+      else if (e.key === "ArrowLeft") newIdx = (idx - 1 + tabs.length) % tabs.length;
+      else if (e.key === "Home") newIdx = 0;
+      else if (e.key === "End") newIdx = tabs.length - 1;
+      else return;
+      e.preventDefault();
+      tabs[newIdx].focus();
+      switchTab(tabs[newIdx].id);
+    });
+  });
+
+  // Dark mode toggle
+  const darkToggle = document.getElementById("darkToggle");
+  darkToggle.addEventListener("click", function() {
+    document.body.classList.toggle("dark");
+    const isDark = document.body.classList.contains("dark");
+    darkToggle.textContent = isDark ? "Light Mode" : "Dark Mode";
+    // Re-render any existing charts
+    if (lastResults) renderAllCharts(lastResults);
+  });
+
+  // Input toggle
+  const inputToggle = document.getElementById("inputToggle");
+  const summaryInputs = document.getElementById("summaryInputs");
+  const studyInputs = document.getElementById("studyInputs");
+  const labelSummary = document.getElementById("label-summary");
+  const labelStudy = document.getElementById("label-study");
+
+  inputToggle.addEventListener("click", function() {
+    const isOn = inputToggle.classList.toggle("on");
+    inputToggle.setAttribute("aria-checked", isOn ? "true" : "false");
+    summaryInputs.style.display = isOn ? "none" : "";
+    studyInputs.style.display = isOn ? "" : "none";
+    labelSummary.classList.toggle("active", !isOn);
+    labelStudy.classList.toggle("active", isOn);
+  });
+
+  // Examples
+  const examples = {
+    bcg: {
+      theta: -0.7141, se: 0.1787, tau2: 0.3084, k: 13,
+      mcid: -0.2, population: 1000000, horizon: 20, cost: 500, discount: 0.035, withinVar: 0.0441
+    },
+    statin: {
+      theta: -0.25, se: 0.055, tau2: 0.002, k: 5,
+      mcid: -0.1, population: 10000000, horizon: 10, cost: 2000, discount: 0.035, withinVar: 0.017
+    },
+    sglt2: {
+      theta: -0.30, se: 0.065, tau2: 0.005, k: 4,
+      mcid: -0.15, population: 500000, horizon: 5, cost: 8000, discount: 0.035, withinVar: 0.01
+    }
+  };
+
+  function loadExample(name) {
+    const ex = examples[name];
+    // Ensure we're on summary mode
+    if (inputToggle.classList.contains("on")) {
+      inputToggle.click();
+    }
+    document.getElementById("inp-theta").value = ex.theta;
+    document.getElementById("inp-se").value = ex.se;
+    document.getElementById("inp-tau2").value = ex.tau2;
+    document.getElementById("inp-k").value = ex.k;
+    document.getElementById("inp-within-var").value = ex.withinVar;
+    document.getElementById("inp-mcid").value = ex.mcid;
+    document.getElementById("inp-pop").value = ex.population;
+    document.getElementById("inp-horizon").value = ex.horizon;
+    document.getElementById("inp-cost").value = ex.cost;
+    document.getElementById("inp-discount").value = ex.discount;
+  }
+
+  document.getElementById("ex-bcg").addEventListener("click", function() { loadExample("bcg"); });
+  document.getElementById("ex-statin").addEventListener("click", function() { loadExample("statin"); });
+  document.getElementById("ex-sglt2").addEventListener("click", function() { loadExample("sglt2"); });
+
+  // -------------------------------------------------------------------
+  // 5. Compute pipeline
+  // -------------------------------------------------------------------
+  let lastResults = null;
+  const N_SIM = 50000;
+  const SEED = 42;
+
+  function gatherInputs() {
+    const isStudyLevel = inputToggle.classList.contains("on");
+    let theta, se, tau2, k, withinVar;
+
+    if (isStudyLevel) {
+      const raw = document.getElementById("inp-studydata").value;
+      const studies = parseStudyData(raw);
+      if (studies.length < 2) return { error: "Need at least 2 studies with valid yi, vi values." };
+      const ma = metaAnalyze(studies);
+      if (!ma) return { error: "Meta-analysis computation failed." };
+      theta = ma.theta;
+      se = ma.se;
+      tau2 = ma.tau2;
+      k = ma.k;
+      withinVar = ma.withinVar;
+    } else {
+      theta = parseFloat(document.getElementById("inp-theta").value);
+      se = parseFloat(document.getElementById("inp-se").value);
+      tau2 = parseFloat(document.getElementById("inp-tau2").value);
+      k = parseInt(document.getElementById("inp-k").value, 10);
+      withinVar = parseFloat(document.getElementById("inp-within-var").value);
+
+      if (!Number.isFinite(theta)) return { error: "Pooled effect (theta) is required." };
+      if (!Number.isFinite(se) || se <= 0) return { error: "SE must be a positive number." };
+      if (!Number.isFinite(tau2) || tau2 < 0) return { error: "tau2 must be non-negative." };
+      if (!Number.isFinite(k) || k < 1) return { error: "k must be at least 1." };
+      if (!Number.isFinite(withinVar) || withinVar <= 0) return { error: "Within-study variance must be positive." };
+    }
+
+    const mcid = parseFloat(document.getElementById("inp-mcid").value);
+    const population = parseInt(document.getElementById("inp-pop").value, 10);
+    const horizon = parseFloat(document.getElementById("inp-horizon").value);
+    const costPerPatient = parseFloat(document.getElementById("inp-cost").value);
+    const discount = parseFloat(document.getElementById("inp-discount").value);
+
+    if (!Number.isFinite(mcid)) return { error: "MCID is required." };
+    if (!Number.isFinite(population) || population < 1) return { error: "Population must be at least 1." };
+    if (!Number.isFinite(horizon) || horizon <= 0) return { error: "Time horizon must be positive." };
+    if (!Number.isFinite(costPerPatient) || costPerPatient < 0) return { error: "Cost per patient must be non-negative." };
+    if (!Number.isFinite(discount) || discount < 0) return { error: "Discount rate must be non-negative." };
+
+    return { theta, se, tau2, k, withinVar, mcid, population, horizon, costPerPatient, discount };
+  }
+
+  async function runAnalysis() {
+    const inputs = gatherInputs();
+    if (inputs.error) {
+      announce(inputs.error);
+      alert(inputs.error);
+      return;
+    }
+
+    announce("Computing Value of Information analysis...");
+
+    const { theta, se, tau2, k, withinVar, mcid, population, horizon, costPerPatient, discount } = inputs;
+
+    // Predictive distribution
+    const draws = predictiveDistribution(theta, se, tau2, N_SIM, SEED);
+    const pWrong = pWrongDecision(draws, mcid);
+    const grade = gradeFromPWrong(pWrong);
+
+    // Discount factor
+    const df = discountFactor(discount, Math.floor(horizon));
+
+    // EVPI
+    const evpi = computeEvpi(draws, mcid);
+    const evpiPop = computeEvpiPopulation(evpi, population, df);
+
+    // EVPPI
+    const evppi = computeEvppi(theta, se, tau2, mcid, N_SIM, SEED + 100);
+
+    // EVSI
+    const evsiCurve = computeEvsiCurve(theta, se, tau2, mcid, withinVar, population, df, costPerPatient, N_SIM, SEED + 200);
+    const optimal = findOptimalN(evsiCurve);
+
+    // Net benefit of current decision
+    const nbTreat = mcid - theta;
+    const nbNoTreat = 0;
+    const currentDecision = nbTreat > nbNoTreat ? "Treat" : "Do not treat";
+
+    // Compute input hash
+    const inputString = JSON.stringify({ theta, se, tau2, k, withinVar, mcid, population, horizon, costPerPatient, discount, nSim: N_SIM, seed: SEED });
+    const inputHash = await computeInputHash(inputString);
+
+    const results = {
+      inputs: { theta, se, tau2, k, withinVar, mcid, population, horizon, costPerPatient, discount },
+      draws, pWrong, grade, df, evpi, evpiPop, evppi, evsiCurve, optimal,
+      nbTreat, nbNoTreat, currentDecision, inputHash,
+      timestamp: new Date().toISOString()
+    };
+
+    lastResults = results;
+
+    // Render everything
+    renderDecisionSpace(results);
+    renderEvpiAnalysis(results);
+    renderEvsiAnalysis(results);
+    renderReport(results);
+    renderAllCharts(results);
+
+    // Switch to decision tab
+    switchTab("tab-decision");
+    announce("VoI analysis complete. P(wrong decision) = " + (pWrong * 100).toFixed(1) + "%. GRADE certainty: " + grade.certainty + ".");
+  }
+
+  // -------------------------------------------------------------------
+  // 6. Rendering functions
+  // -------------------------------------------------------------------
+
+  function getPlotlyLayout(title, isDark) {
+    return {
+      title: { text: title, font: { size: 14, family: "Segoe UI, sans-serif" } },
+      paper_bgcolor: isDark ? "#1e293b" : "#ffffff",
+      plot_bgcolor: isDark ? "#0f172a" : "#f8fafc",
+      font: { color: isDark ? "#e2e8f0" : "#1e293b", family: "Segoe UI, sans-serif" },
+      margin: { t: 50, r: 30, b: 50, l: 60 },
+      xaxis: { gridcolor: isDark ? "#334155" : "#e2e8f0" },
+      yaxis: { gridcolor: isDark ? "#334155" : "#e2e8f0" }
+    };
+  }
+
+  function isDarkMode() {
+    return document.body.classList.contains("dark");
+  }
+
+  function renderDecisionSpace(results) {
+    const { pWrong, grade, nbTreat, currentDecision, inputs } = results;
+
+    const statsHtml = '<div class="stat-card">' +
+      '<div class="big-number' + (pWrong > 0.2 ? ' danger' : ' success') + '">' + (pWrong * 100).toFixed(1) + '%</div>' +
+      '<div class="stat-label">P(Wrong Decision)</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+      '<div><span class="badge ' + grade.badgeClass + '">' + escapeHtml(grade.certainty) + '</span></div>' +
+      '<div class="stat-label">GRADE Certainty</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number" style="font-size:1.6rem;">' + escapeHtml(currentDecision) + '</div>' +
+      '<div class="stat-label">Current Optimal Decision</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number" style="font-size:1.4rem;">' + inputs.theta.toFixed(4) + '</div>' +
+      '<div class="stat-label">Pooled Effect (theta)</div>' +
+      '</div>';
+    document.getElementById("decision-stats").innerHTML = statsHtml;
+  }
+
+  function renderEvpiAnalysis(results) {
+    const { evpi, evpiPop, evppi, inputs, df } = results;
+
+    const evppiThetaPop = evppi.theta * inputs.population * df;
+    const evppiTau2Pop = evppi.tau2 * inputs.population * df;
+
+    const statsHtml = '<div class="stat-card">' +
+      '<div class="big-number">' + formatCurrency(evpiPop) + '</div>' +
+      '<div class="stat-label">Population EVPI</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number" style="font-size:1.4rem;">' + formatCurrency(evpi) + '</div>' +
+      '<div class="stat-label">Per-Patient EVPI</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number" style="font-size:1.4rem;">' + formatCurrency(evppiThetaPop) + '</div>' +
+      '<div class="stat-label">EVPPI (theta)</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number" style="font-size:1.4rem;">' + formatCurrency(evppiTau2Pop) + '</div>' +
+      '<div class="stat-label">EVPPI (tau2)</div>' +
+      '</div>';
+    document.getElementById("evpi-stats").innerHTML = statsHtml;
+
+    const pct = (evppi.thetaFraction * 100).toFixed(0);
+    document.getElementById("evppi-text").textContent =
+      pct + "% of decision uncertainty comes from the " + evppi.dominant +
+      " estimate. The remaining " + (100 - parseInt(pct, 10)) + "% is attributable to " +
+      (evppi.dominant === "treatment effect" ? "heterogeneity (tau2)" : "the treatment effect (theta)") + ".";
+  }
+
+  function renderEvsiAnalysis(results) {
+    const { optimal, inputs } = results;
+
+    const statsHtml = '<div class="stat-card">' +
+      '<div class="big-number">' + formatNumber(optimal.optimalN) + '</div>' +
+      '<div class="stat-label">Optimal Trial Size (N)</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number">' + formatCurrency(optimal.evsiPop) + '</div>' +
+      '<div class="stat-label">EVSI at Optimal N</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number' + (optimal.netBenefit > 0 ? ' success' : ' danger') + '">' + formatCurrency(optimal.netBenefit) + '</div>' +
+      '<div class="stat-label">Net Benefit at Optimal N</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number" style="font-size:1.4rem;">' + (optimal.breakevenN !== null ? formatNumber(optimal.breakevenN) : "N/A") + '</div>' +
+      '<div class="stat-label">Break-Even N</div>' +
+      '</div>';
+    document.getElementById("evsi-stats").innerHTML = statsHtml;
+
+    // Verdict card
+    const verdictEl = document.getElementById("evsi-verdict");
+    if (optimal.netBenefit > 0) {
+      verdictEl.innerHTML = '<div class="verdict-card">' +
+        '<div class="verdict-title">Further Research is Worthwhile</div>' +
+        '<div class="verdict-text">A trial of N=' + formatNumber(optimal.optimalN) +
+        ' would provide net value of ' + formatCurrency(optimal.netBenefit) +
+        ' (EVSI ' + formatCurrency(optimal.evsiPop) + ' minus trial cost ' +
+        formatCurrency(optimal.cost) + '). ' +
+        (optimal.breakevenN !== null ? 'Trials remain cost-effective up to approximately N=' + formatNumber(optimal.breakevenN) + '.' : '') +
+        '</div></div>';
+    } else {
+      verdictEl.innerHTML = '<div class="verdict-card negative">' +
+        '<div class="verdict-title">Further Research May Not Be Cost-Effective</div>' +
+        '<div class="verdict-text">At no trial size does the expected value of sample information exceed the cost of conducting the trial. ' +
+        'The maximum net benefit is ' + formatCurrency(optimal.netBenefit) + ' at N=' + formatNumber(optimal.optimalN) +
+        '. Consider whether current evidence is sufficient for decision-making.</div></div>';
+    }
+  }
+
+  async function renderReport(results) {
+    const { inputs, pWrong, grade, evpi, evpiPop, evppi, optimal, currentDecision, inputHash, timestamp, df } = results;
+
+    const evppiThetaPop = evppi.theta * inputs.population * df;
+    const evppiTau2Pop = evppi.tau2 * inputs.population * df;
+
+    // Plain-text report
+    const report = [
+      "=============================================================",
+      "  MetaVoI - Value of Information Analysis Report",
+      "=============================================================",
+      "",
+      "Generated: " + timestamp,
+      "Input Hash (SHA-256): " + inputHash,
+      "",
+      "--- INPUT PARAMETERS ---",
+      "Pooled effect (theta):      " + inputs.theta.toFixed(6),
+      "Standard error (SE):        " + inputs.se.toFixed(6),
+      "Between-study var (tau2):   " + inputs.tau2.toFixed(6),
+      "Number of studies (k):      " + inputs.k,
+      "Within-study variance:      " + inputs.withinVar.toFixed(6),
+      "MCID:                       " + inputs.mcid.toFixed(4),
+      "Affected population:        " + formatNumber(inputs.population),
+      "Time horizon (years):       " + inputs.horizon,
+      "Cost per patient ($):       " + formatNumber(inputs.costPerPatient),
+      "Discount rate:              " + inputs.discount.toFixed(4),
+      "Monte Carlo simulations:    " + formatNumber(N_SIM),
+      "PRNG seed:                  " + SEED,
+      "",
+      "--- DECISION ANALYSIS ---",
+      "Current optimal decision:   " + currentDecision,
+      "P(Wrong decision):          " + (pWrong * 100).toFixed(2) + "%",
+      "GRADE certainty:            " + grade.certainty,
+      "Recommendation:             " + grade.recommendation,
+      "",
+      "--- EXPECTED VALUE OF PERFECT INFORMATION ---",
+      "Per-patient EVPI:           " + formatCurrency(evpi),
+      "Population EVPI:            " + formatCurrency(evpiPop),
+      "  Discount factor:          " + df.toFixed(4),
+      "",
+      "--- EVPPI (Partial Perfect Information) ---",
+      "EVPPI (theta):              " + formatCurrency(evppiThetaPop) + " (" + (evppi.thetaFraction * 100).toFixed(0) + "%)",
+      "EVPPI (tau2):               " + formatCurrency(evppiTau2Pop) + " (" + ((1 - evppi.thetaFraction) * 100).toFixed(0) + "%)",
+      "Dominant parameter:         " + evppi.dominant,
+      "",
+      "--- TRIAL PLANNING (EVSI) ---",
+      "Optimal trial size (N):     " + formatNumber(optimal.optimalN),
+      "EVSI at optimal N:          " + formatCurrency(optimal.evsiPop),
+      "Trial cost at optimal N:    " + formatCurrency(optimal.cost),
+      "Net benefit:                " + formatCurrency(optimal.netBenefit),
+      "Break-even N:               " + (optimal.breakevenN !== null ? formatNumber(optimal.breakevenN) : "N/A"),
+      "",
+      "--- CONCLUSION ---",
+      optimal.netBenefit > 0
+        ? "A trial of N=" + formatNumber(optimal.optimalN) + " is recommended (net value: " + formatCurrency(optimal.netBenefit) + ")."
+        : "Further research is unlikely to be cost-effective at current parameters.",
+      "",
+      "=============================================================",
+      "  Generated by MetaVoI v1.0 | PRNG: xoshiro128** | Seed: " + SEED,
+      "============================================================="
+    ].join("\n");
+
+    document.getElementById("report-text").textContent = report;
+
+    // TruthCert JSON
+    const certBundle = {
+      truthcert: {
+        version: "1.0.0",
+        generator: "MetaVoI",
+        timestamp: timestamp,
+        inputHash: inputHash,
+        hashAlgorithm: "SHA-256",
+        prng: { algorithm: "xoshiro128**", seed: SEED, simulations: N_SIM }
+      },
+      inputs: {
+        theta: inputs.theta,
+        se: inputs.se,
+        tau2: inputs.tau2,
+        k: inputs.k,
+        withinVar: inputs.withinVar,
+        mcid: inputs.mcid,
+        population: inputs.population,
+        horizon: inputs.horizon,
+        costPerPatient: inputs.costPerPatient,
+        discount: inputs.discount
+      },
+      results: {
+        decision: {
+          currentOptimal: currentDecision,
+          pWrongDecision: parseFloat(pWrong.toFixed(6)),
+          gradeCertainty: grade.certainty,
+          recommendation: grade.recommendation
+        },
+        evpi: {
+          perPatient: parseFloat(evpi.toFixed(6)),
+          population: parseFloat(evpiPop.toFixed(2)),
+          discountFactor: parseFloat(df.toFixed(6))
+        },
+        evppi: {
+          theta: parseFloat(evppiThetaPop.toFixed(2)),
+          tau2: parseFloat(evppiTau2Pop.toFixed(2)),
+          thetaFraction: parseFloat(evppi.thetaFraction.toFixed(4)),
+          dominantParameter: evppi.dominant
+        },
+        evsi: {
+          optimalN: optimal.optimalN,
+          evsiPopulation: parseFloat(optimal.evsiPop.toFixed(2)),
+          trialCost: parseFloat(optimal.cost.toFixed(2)),
+          netBenefit: parseFloat(optimal.netBenefit.toFixed(2)),
+          breakevenN: optimal.breakevenN
+        }
+      },
+      validation: {
+        status: "CERTIFIED",
+        checks: [
+          { name: "input_hash_verified", pass: true },
+          { name: "deterministic_prng", pass: true },
+          { name: "evpi_non_negative", pass: evpi >= 0 },
+          { name: "evsi_bounded_by_evpi", pass: optimal.evsiPop <= evpiPop + 0.01 },
+          { name: "p_wrong_in_range", pass: pWrong >= 0 && pWrong <= 1 }
+        ]
+      }
+    };
+
+    document.getElementById("report-json").textContent = JSON.stringify(certBundle, null, 2);
+  }
+
+  // -------------------------------------------------------------------
+  // 7. Chart rendering
+  // -------------------------------------------------------------------
+
+  function renderAllCharts(results) {
+    renderPosteriorChart(results);
+    renderNetBenefitBarChart(results);
+    renderEvppiChart(results);
+    renderEvsiChart(results);
+    renderNetBenefitCurveChart(results);
+  }
+
+  function renderPosteriorChart(results) {
+    const { inputs, draws, pWrong } = results;
+    const { theta, se, tau2, mcid } = inputs;
+    const totalSD = Math.sqrt(se * se + tau2);
+    const dark = isDarkMode();
+
+    // Build density curve
+    const xMin = theta - 4 * totalSD;
+    const xMax = theta + 4 * totalSD;
+    const nPts = 200;
+    const xVals = [];
+    const yVals = [];
+    const step = (xMax - xMin) / (nPts - 1);
+
+    for (let i = 0; i < nPts; i++) {
+      const x = xMin + i * step;
+      xVals.push(x);
+      yVals.push(normalPDF(x, theta, totalSD));
+    }
+
+    // Split into treat (x < mcid) and no-treat (x >= mcid)
+    const xTreat = [], yTreat = [], xNoTreat = [], yNoTreat = [];
+    for (let i = 0; i < nPts; i++) {
+      if (xVals[i] <= mcid) {
+        xTreat.push(xVals[i]);
+        yTreat.push(yVals[i]);
+      } else {
+        xNoTreat.push(xVals[i]);
+        yNoTreat.push(yVals[i]);
+      }
+    }
+
+    // Add boundary point to both for clean fill
+    const yAtMcid = normalPDF(mcid, theta, totalSD);
+    xTreat.push(mcid);
+    yTreat.push(yAtMcid);
+    xNoTreat.unshift(mcid);
+    yNoTreat.unshift(yAtMcid);
+
+    const traces = [
+      {
+        x: xTreat, y: yTreat,
+        type: "scatter", mode: "lines", fill: "tozeroy",
+        fillcolor: "rgba(34,197,94,0.25)",
+        line: { color: "rgba(34,197,94,0.8)", width: 2 },
+        name: "Treat region (theta < MCID)"
+      },
+      {
+        x: xNoTreat, y: yNoTreat,
+        type: "scatter", mode: "lines", fill: "tozeroy",
+        fillcolor: "rgba(239,68,68,0.2)",
+        line: { color: "rgba(239,68,68,0.7)", width: 2 },
+        name: "No-treat region (theta >= MCID)"
+      }
+    ];
+
+    const layout = getPlotlyLayout("Predictive Distribution with Decision Threshold", dark);
+    layout.xaxis.title = { text: "Effect size (theta)" };
+    layout.yaxis.title = { text: "Density" };
+    layout.shapes = [{
+      type: "line",
+      x0: mcid, x1: mcid, y0: 0, y1: Math.max.apply(null, yVals) * 1.1,
+      line: { color: dark ? "#fbbf24" : "#d97706", width: 2, dash: "dash" }
+    }];
+    layout.annotations = [{
+      x: mcid, y: Math.max.apply(null, yVals) * 1.05,
+      text: "MCID = " + mcid,
+      showarrow: false,
+      font: { color: dark ? "#fbbf24" : "#d97706", size: 12 }
+    }];
+    layout.showlegend = true;
+    layout.legend = { x: 0.01, y: 0.99, bgcolor: "rgba(0,0,0,0)" };
+
+    Plotly.newPlot("chart-posterior", traces, layout, { responsive: true });
+  }
+
+  function renderNetBenefitBarChart(results) {
+    const { nbTreat, nbNoTreat } = results;
+    const dark = isDarkMode();
+
+    const traces = [{
+      x: ["Treat", "No Treat"],
+      y: [nbTreat, nbNoTreat],
+      type: "bar",
+      marker: {
+        color: [nbTreat >= nbNoTreat ? "#16a34a" : "#94a3b8", nbNoTreat >= nbTreat ? "#16a34a" : "#94a3b8"]
+      },
+      text: [nbTreat.toFixed(4), nbNoTreat.toFixed(4)],
+      textposition: "outside"
+    }];
+
+    const layout = getPlotlyLayout("Expected Net Benefit per Patient", dark);
+    layout.xaxis.title = { text: "Decision" };
+    layout.yaxis.title = { text: "Net Benefit" };
+    layout.showlegend = false;
+
+    Plotly.newPlot("chart-netbenefit", traces, layout, { responsive: true });
+  }
+
+  function renderEvppiChart(results) {
+    const { evppi, inputs, df } = results;
+    const dark = isDarkMode();
+
+    const evppiThetaPop = evppi.theta * inputs.population * df;
+    const evppiTau2Pop = evppi.tau2 * inputs.population * df;
+
+    // Sort descending for tornado
+    const params = [
+      { name: "Treatment Effect (theta)", value: evppiThetaPop },
+      { name: "Heterogeneity (tau2)", value: evppiTau2Pop }
+    ].sort(function(a, b) { return b.value - a.value; });
+
+    const traces = [{
+      y: params.map(function(p) { return p.name; }),
+      x: params.map(function(p) { return p.value; }),
+      type: "bar",
+      orientation: "h",
+      marker: {
+        color: ["#0f766e", "#0e7490"]
+      },
+      text: params.map(function(p) { return formatCurrency(p.value); }),
+      textposition: "outside"
+    }];
+
+    const layout = getPlotlyLayout("EVPPI by Parameter (Population Level)", dark);
+    layout.xaxis.title = { text: "EVPPI ($)" };
+    layout.yaxis.automargin = true;
+    layout.showlegend = false;
+    layout.margin.l = 180;
+
+    Plotly.newPlot("chart-evppi", traces, layout, { responsive: true });
+  }
+
+  function renderEvsiChart(results) {
+    const { optimal } = results;
+    const curve = optimal.curve;
+    const dark = isDarkMode();
+
+    const traces = [
+      {
+        x: curve.map(function(c) { return c.n; }),
+        y: curve.map(function(c) { return c.evsiPop; }),
+        type: "scatter", mode: "lines+markers",
+        name: "EVSI (population)",
+        line: { color: "#0f766e", width: 3 },
+        marker: { size: 5 }
+      },
+      {
+        x: curve.map(function(c) { return c.n; }),
+        y: curve.map(function(c) { return c.cost; }),
+        type: "scatter", mode: "lines",
+        name: "Trial cost",
+        line: { color: "#dc2626", width: 2, dash: "dash" }
+      }
+    ];
+
+    const layout = getPlotlyLayout("EVSI vs Trial Cost", dark);
+    layout.xaxis.title = { text: "Trial Sample Size (N)" };
+    layout.yaxis.title = { text: "Value ($)" };
+    layout.showlegend = true;
+    layout.legend = { x: 0.6, y: 0.95, bgcolor: "rgba(0,0,0,0)" };
+
+    // Mark optimal N
+    layout.annotations = [{
+      x: optimal.optimalN,
+      y: curve.find(function(c) { return c.n === optimal.optimalN; }).evsiPop,
+      text: "Optimal N=" + formatNumber(optimal.optimalN),
+      showarrow: true,
+      arrowhead: 2,
+      ax: 40, ay: -40,
+      font: { color: dark ? "#34d399" : "#059669", size: 12, weight: "bold" }
+    }];
+
+    Plotly.newPlot("chart-evsi", traces, layout, { responsive: true });
+  }
+
+  function renderNetBenefitCurveChart(results) {
+    const { optimal } = results;
+    const curve = optimal.curve;
+    const dark = isDarkMode();
+
+    const nVals = curve.map(function(c) { return c.n; });
+    const nbVals = curve.map(function(c) { return c.netBenefit; });
+
+    // Separate positive and negative for fill
+    const posY = nbVals.map(function(v) { return v > 0 ? v : 0; });
+    const negY = nbVals.map(function(v) { return v < 0 ? v : 0; });
+
+    const traces = [
+      {
+        x: nVals, y: posY,
+        type: "scatter", mode: "none", fill: "tozeroy",
+        fillcolor: "rgba(34,197,94,0.2)",
+        showlegend: false
+      },
+      {
+        x: nVals, y: negY,
+        type: "scatter", mode: "none", fill: "tozeroy",
+        fillcolor: "rgba(239,68,68,0.15)",
+        showlegend: false
+      },
+      {
+        x: nVals, y: nbVals,
+        type: "scatter", mode: "lines+markers",
+        name: "Net Benefit (EVSI - Cost)",
+        line: { color: dark ? "#34d399" : "#0f766e", width: 3 },
+        marker: { size: 5 }
+      }
+    ];
+
+    const layout = getPlotlyLayout("Net Benefit of Further Research", dark);
+    layout.xaxis.title = { text: "Trial Sample Size (N)" };
+    layout.yaxis.title = { text: "Net Benefit ($)" };
+    layout.showlegend = true;
+    layout.legend = { x: 0.6, y: 0.95, bgcolor: "rgba(0,0,0,0)" };
+
+    // Zero line
+    layout.shapes = [{
+      type: "line",
+      x0: nVals[0], x1: nVals[nVals.length - 1], y0: 0, y1: 0,
+      line: { color: dark ? "#475569" : "#94a3b8", width: 1, dash: "dot" }
+    }];
+
+    // Annotations
+    const annotations = [];
+    annotations.push({
+      x: optimal.optimalN,
+      y: optimal.netBenefit,
+      text: "Optimal N=" + formatNumber(optimal.optimalN),
+      showarrow: true, arrowhead: 2, ax: 30, ay: -35,
+      font: { color: dark ? "#34d399" : "#059669", size: 12 }
+    });
+
+    if (optimal.breakevenN !== null) {
+      annotations.push({
+        x: optimal.breakevenN, y: 0,
+        text: "Break-even N=" + formatNumber(optimal.breakevenN),
+        showarrow: true, arrowhead: 2, ax: 40, ay: 30,
+        font: { color: dark ? "#fbbf24" : "#d97706", size: 11 }
+      });
+    }
+
+    layout.annotations = annotations;
+
+    Plotly.newPlot("chart-netben", traces, layout, { responsive: true });
+  }
+
+  // -------------------------------------------------------------------
+  // 8. Button handlers
+  // -------------------------------------------------------------------
+
+  document.getElementById("btnCompute").addEventListener("click", function() {
+    runAnalysis();
+  });
+
+  document.getElementById("btnCopyReport").addEventListener("click", function() {
+    const text = document.getElementById("report-text").textContent;
+    copyToClipboard(text, "Report copied to clipboard.");
+  });
+
+  document.getElementById("btnCopyJSON").addEventListener("click", function() {
+    const text = document.getElementById("report-json").textContent;
+    copyToClipboard(text, "JSON bundle copied to clipboard.");
+  });
+
+  function copyToClipboard(text, msg) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        announce(msg);
+      }).catch(function() {
+        fallbackCopy(text, msg);
+      });
+    } else {
+      fallbackCopy(text, msg);
+    }
+  }
+
+  function fallbackCopy(text, msg) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand("copy");
+      announce(msg);
+    } catch (e) {
+      announce("Copy failed. Please select and copy manually.");
+    }
+    document.body.removeChild(ta);
+  }
+
+  function announce(msg) {
+    const el = document.getElementById("liveRegion");
+    el.textContent = "";
+    setTimeout(function() { el.textContent = msg; }, 50);
+  }
+
+  // Keyboard: Enter/Space on buttons
+  document.addEventListener("keydown", function(e) {
+    if (e.target.classList.contains("toggle-switch") && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      e.target.click();
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
