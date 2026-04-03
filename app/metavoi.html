@@ -443,6 +443,7 @@ body.dark .js-plotly-plot .plotly .modebar-btn path { fill: var(--muted); }
   <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-evpi" id="tab-evpi" tabindex="-1">EVPI Analysis</button>
   <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-evsi" id="tab-evsi" tabindex="-1">Trial Planning</button>
   <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-report" id="tab-report" tabindex="-1">Report &amp; Certify</button>
+  <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-advanced" id="tab-advanced" tabindex="-1">Advanced</button>
 </nav>
 
 <div aria-live="polite" id="liveRegion" class="sr-only"></div>
@@ -600,6 +601,41 @@ body.dark .js-plotly-plot .plotly .modebar-btn path { fill: var(--muted); }
       <button class="btn btn-secondary btn-small" id="btnCopyJSON">Copy JSON</button>
     </div>
     <pre class="report-pre" id="report-json" tabindex="0">Run a VoI analysis to generate the certification bundle.</pre>
+  </div>
+</div>
+
+<!-- Tab 6: Advanced -->
+<div class="tab-panel" role="tabpanel" id="panel-advanced" aria-labelledby="tab-advanced">
+  <div class="panel">
+    <h2>Sensitivity Analysis (Tornado Diagram)</h2>
+    <p style="font-size:0.88rem; color:var(--muted); margin-bottom:0.5rem;">
+      One-at-a-time perturbation (+/-20%) shows which parameters drive population EVPI.
+    </p>
+    <div class="chart-container" id="chart-sensitivity-tornado" aria-label="Tornado diagram showing parameter sensitivity of EVPI"></div>
+  </div>
+  <div class="panel">
+    <h2>Stochastic Dominance (CDF Comparison)</h2>
+    <p style="font-size:0.88rem; color:var(--muted); margin-bottom:0.5rem;">
+      Empirical CDFs of net benefit for treat vs. no-treat. FSD holds when the treat CDF is entirely below or equal to the no-treat CDF.
+    </p>
+    <div class="stats-grid" id="dominance-stats"></div>
+    <div class="chart-container" id="chart-dominance-cdf" aria-label="CDF comparison for stochastic dominance analysis"></div>
+  </div>
+  <div class="panel">
+    <h2>Entropy Analysis</h2>
+    <p style="font-size:0.88rem; color:var(--muted); margin-bottom:0.5rem;">
+      Decision entropy in bits and its reduction as trial size increases.
+    </p>
+    <div class="stats-grid" id="entropy-stats"></div>
+    <div class="chart-container" id="chart-entropy-reduction" aria-label="Entropy reduction curve as a function of trial size"></div>
+  </div>
+  <div class="panel">
+    <h2>Bayesian Bootstrap (EVPI Uncertainty)</h2>
+    <p style="font-size:0.88rem; color:var(--muted); margin-bottom:0.5rem;">
+      Dirichlet-weighted resampling quantifies uncertainty in the EVPI estimate itself.
+    </p>
+    <div class="stats-grid" id="bootstrap-stats"></div>
+    <div class="chart-container" id="chart-bootstrap-hist" aria-label="Histogram of bootstrapped EVPI values"></div>
   </div>
 </div>
 
@@ -891,6 +927,300 @@ body.dark .js-plotly-plot .plotly .modebar-btn path { fill: var(--muted); }
     }
   }
 
+  // -------------------------------------------------------------------
+  // 3b. Advanced methods (Tier 2-5)
+  // -------------------------------------------------------------------
+
+  /** Sensitivity analysis: one-at-a-time tornado diagram data */
+  function computeSensitivityTornado(theta, se, tau2, mcid, withinVar, population, horizon, costPerPatient, discount, nSim, seed) {
+    var df = discountFactor(discount, Math.floor(horizon));
+
+    function evpiForParams(th, s, t2, mc, pop, hor) {
+      var draws = predictiveDistribution(th, s, t2, 2000, seed + 999);
+      var evpiVal = computeEvpi(draws, mc);
+      var dfVal = discountFactor(discount, Math.floor(hor));
+      return evpiVal * pop * dfVal;
+    }
+
+    var baseEvpi = evpiForParams(theta, se, tau2, mcid, population, horizon);
+
+    var params = [
+      { name: "Treatment Effect (theta)", base: theta, field: "theta" },
+      { name: "Heterogeneity (tau2)", base: tau2, field: "tau2" },
+      { name: "MCID", base: mcid, field: "mcid" },
+      { name: "Population", base: population, field: "population" }
+    ];
+
+    var tornado = [];
+    for (var p = 0; p < params.length; p++) {
+      var par = params[p];
+      var bv = par.base;
+      var lowVal, highVal;
+      if (Math.abs(bv) < 1e-12) {
+        lowVal = bv - 0.1;
+        highVal = bv + 0.1;
+      } else {
+        lowVal = bv * 0.8;
+        highVal = bv * 1.2;
+        if (lowVal > highVal) { var tmp = lowVal; lowVal = highVal; highVal = tmp; }
+      }
+
+      var th = theta, t2 = tau2, mc = mcid, pop = population;
+      // Low
+      if (par.field === "theta") th = lowVal;
+      else if (par.field === "tau2") t2 = Math.max(lowVal, 0);
+      else if (par.field === "mcid") mc = lowVal;
+      else pop = Math.max(lowVal, 1);
+      var evpiLow = evpiForParams(th, se, t2, mc, pop, horizon);
+
+      // Reset and set high
+      th = theta; t2 = tau2; mc = mcid; pop = population;
+      if (par.field === "theta") th = highVal;
+      else if (par.field === "tau2") t2 = Math.max(highVal, 0);
+      else if (par.field === "mcid") mc = highVal;
+      else pop = Math.max(highVal, 1);
+      var evpiHigh = evpiForParams(th, se, t2, mc, pop, horizon);
+
+      tornado.push({
+        name: par.name,
+        low: evpiLow,
+        high: evpiHigh,
+        range: Math.abs(evpiHigh - evpiLow),
+        base: baseEvpi
+      });
+    }
+
+    tornado.sort(function(a, b) { return b.range - a.range; });
+    return { tornado: tornado, baseEvpi: baseEvpi };
+  }
+
+  /** Stochastic dominance: CDF comparison for treat vs no-treat */
+  function computeStochasticDominance(theta, se, tau2, mcid, nSim, seed) {
+    var rng = xoshiro128ss(seed + 30);
+    var predVar = se * se + tau2;
+    var predSD = Math.sqrt(predVar);
+
+    var nbTreat = new Float64Array(nSim);
+    var nbNoTreat = new Float64Array(nSim);  // all zeros
+
+    for (var i = 0; i < nSim; i++) {
+      var thetaDraw = theta + predSD * rng.nextGaussian();
+      nbTreat[i] = mcid - thetaDraw;
+    }
+
+    // Sort for CDF
+    var sortedTreat = Array.from(nbTreat).sort(function(a, b) { return a - b; });
+    var sortedNoTreat = Array.from(nbNoTreat).sort(function(a, b) { return a - b; });
+
+    // Build grid
+    var allVals = sortedTreat.concat(sortedNoTreat);
+    var xMin = allVals.reduce(function(a, b) { return Math.min(a, b); }, Infinity);
+    var xMax = allVals.reduce(function(a, b) { return Math.max(a, b); }, -Infinity);
+    var margin = 0.05 * (xMax - xMin);
+    if (margin < 0.01) margin = 0.1;
+    var nGrid = 300;
+    var grid = [];
+    var step = (xMax + margin - (xMin - margin)) / (nGrid - 1);
+    for (var gi = 0; gi < nGrid; gi++) {
+      grid.push(xMin - margin + gi * step);
+    }
+
+    // Empirical CDFs via binary search
+    function empiricalCDF(sorted, x) {
+      var lo = 0, hi = sorted.length;
+      while (lo < hi) {
+        var mid = (lo + hi) >>> 1;
+        if (sorted[mid] <= x) lo = mid + 1;
+        else hi = mid;
+      }
+      return lo / sorted.length;
+    }
+
+    var cdfTreatArr = [];
+    var cdfNoTreatArr = [];
+    var fsdCount = 0;
+    for (var gi2 = 0; gi2 < nGrid; gi2++) {
+      var ct = empiricalCDF(sortedTreat, grid[gi2]);
+      var cn = empiricalCDF(sortedNoTreat, grid[gi2]);
+      cdfTreatArr.push(ct);
+      cdfNoTreatArr.push(cn);
+      if (ct <= cn + 1e-6) fsdCount++;
+    }
+
+    var fsdRatio = fsdCount / nGrid;
+    var fsdHolds = fsdCount === nGrid;
+
+    // SSD: cumulative integral of CDF
+    var dx = grid.length > 1 ? grid[1] - grid[0] : 1;
+    var intTreat = 0, intNoTreat = 0;
+    var ssdCount = 0;
+    for (var gi3 = 0; gi3 < nGrid; gi3++) {
+      intTreat += cdfTreatArr[gi3] * dx;
+      intNoTreat += cdfNoTreatArr[gi3] * dx;
+      if (intTreat <= intNoTreat + 1e-6) ssdCount++;
+    }
+    var ssdHolds = ssdCount === nGrid;
+
+    // CVaR at 5%
+    var alpha = 0.05;
+    var cutoff = Math.max(1, Math.floor(nSim * alpha));
+    var cvarTreat = 0;
+    for (var ci = 0; ci < cutoff; ci++) cvarTreat += sortedTreat[ci];
+    cvarTreat /= cutoff;
+
+    var meanTreat = 0;
+    for (var mi = 0; mi < nSim; mi++) meanTreat += nbTreat[mi];
+    meanTreat /= nSim;
+
+    var recommendation;
+    if (fsdHolds) {
+      recommendation = "Strong: treat FSD-dominates no-treat";
+    } else if (ssdHolds) {
+      recommendation = "Moderate: treat SSD-dominates (risk-averse preference)";
+    } else if (meanTreat > 0) {
+      recommendation = "Weak: treat has higher expected NB but no dominance";
+    } else {
+      recommendation = "No dominance: no-treat preferred on expected value";
+    }
+
+    return {
+      grid: grid,
+      cdfTreat: cdfTreatArr,
+      cdfNoTreat: cdfNoTreatArr,
+      fsdHolds: fsdHolds,
+      fsdRatio: fsdRatio,
+      ssdHolds: ssdHolds,
+      cvarTreat: cvarTreat,
+      recommendation: recommendation
+    };
+  }
+
+  /** Entropy analysis: decision entropy and reduction curve */
+  function computeEntropyAnalysis(theta, se, tau2, mcid, withinVar, seed) {
+    var predVar = se * se + tau2;
+    var predSD = Math.sqrt(predVar);
+
+    // P(treat) = P(theta < mcid) via normal CDF
+    var z = (mcid - theta) / predSD;
+    var pTreat = normalCDF(z);
+
+    // Binary entropy in bits
+    function binaryEntropy(p) {
+      if (p <= 0 || p >= 1) return 0;
+      return -p * Math.log2(p) - (1 - p) * Math.log2(1 - p);
+    }
+
+    var decisionEntropy = binaryEntropy(pTreat);
+    var channelCapacity = 1.0; // 1 bit for binary
+    var capacityUtilization = decisionEntropy / channelCapacity;
+
+    // Entropy reduction curve for various trial sizes
+    var trialSizes = [25, 50, 100, 200, 500, 1000, 2000, 5000];
+    var rng = xoshiro128ss(seed + 60);
+    var reductionCurve = [];
+
+    for (var ti = 0; ti < trialSizes.length; ti++) {
+      var nTrial = trialSizes[ti];
+      var trialVar = withinVar / nTrial;
+      var nMCSub = 500;
+      var sumPostEntropy = 0;
+
+      for (var mi = 0; mi < nMCSub; mi++) {
+        // Simulate trial observation
+        var yNew = theta + Math.sqrt(trialVar + tau2) * rng.nextGaussian();
+
+        // Bayesian update
+        var priorPrec = 1 / predVar;
+        var trialPrec = 1 / trialVar;
+        var postPrec = priorPrec + trialPrec;
+        var postVar = 1 / postPrec;
+        var postMean = (priorPrec * theta + trialPrec * yNew) / postPrec;
+        var postSD = Math.sqrt(postVar);
+
+        // Post-trial decision entropy
+        var zPost = (mcid - postMean) / postSD;
+        var pTreatPost = normalCDF(zPost);
+        sumPostEntropy += binaryEntropy(pTreatPost);
+      }
+
+      var expectedPostEntropy = sumPostEntropy / nMCSub;
+      var deltaH = Math.max(0, decisionEntropy - expectedPostEntropy);
+      reductionCurve.push({ n: nTrial, deltaH: deltaH, postEntropy: expectedPostEntropy });
+    }
+
+    return {
+      decisionEntropy: decisionEntropy,
+      channelCapacity: channelCapacity,
+      capacityUtilization: capacityUtilization,
+      pTreat: pTreat,
+      reductionCurve: reductionCurve
+    };
+  }
+
+  /** Bayesian bootstrap: Dirichlet-weighted EVPI uncertainty */
+  function computeBayesianBootstrap(draws, mcid, nBoot, population, df) {
+    var rng = xoshiro128ss(71);  // fixed seed for reproducibility
+    var n = draws.length;
+    var evpiBoot = new Float64Array(nBoot);
+
+    for (var b = 0; b < nBoot; b++) {
+      // Generate Dirichlet(1,...,1) weights via Gamma(1,1) draws
+      var weights = new Float64Array(n);
+      var wSum = 0;
+      for (var i = 0; i < n; i++) {
+        // Gamma(1,1) = Exponential(1) = -log(U)
+        weights[i] = -Math.log(rng.next() + 1e-30);
+        wSum += weights[i];
+      }
+      // Normalize
+      for (var j = 0; j < n; j++) weights[j] /= wSum;
+
+      // Weighted EVPI
+      var sumPerfect = 0;
+      var sumTreat = 0;
+      for (var k2 = 0; k2 < n; k2++) {
+        var nbTreatVal = mcid - draws[k2];
+        sumPerfect += weights[k2] * Math.max(nbTreatVal, 0);
+        sumTreat += weights[k2] * nbTreatVal;
+      }
+      var currentBest = Math.max(sumTreat, 0);
+      evpiBoot[b] = Math.max(sumPerfect - currentBest, 0);
+    }
+
+    // Population-level
+    var evpiPopBoot = new Float64Array(nBoot);
+    for (var b2 = 0; b2 < nBoot; b2++) {
+      evpiPopBoot[b2] = evpiBoot[b2] * population * df;
+    }
+
+    // Sort for percentiles
+    var sortedPop = Array.from(evpiPopBoot).sort(function(a, b) { return a - b; });
+    var idx25 = Math.floor(0.025 * nBoot);
+    var idx975 = Math.min(Math.floor(0.975 * nBoot), nBoot - 1);
+
+    var mean = 0;
+    for (var b3 = 0; b3 < nBoot; b3++) mean += evpiPopBoot[b3];
+    mean /= nBoot;
+
+    var variance = 0;
+    for (var b4 = 0; b4 < nBoot; b4++) {
+      var diff = evpiPopBoot[b4] - mean;
+      variance += diff * diff;
+    }
+    variance /= nBoot;
+    var sd = Math.sqrt(variance);
+    var cv = mean > 1e-10 ? sd / mean : 0;
+
+    return {
+      distribution: Array.from(evpiPopBoot),
+      mean: mean,
+      ciLow: sortedPop[idx25],
+      ciHigh: sortedPop[idx975],
+      cv: cv,
+      sd: sd
+    };
+  }
+
   /** Compute SHA-256 hash of input string (returns promise) */
   async function computeInputHash(inputStr) {
     const encoder = new TextEncoder();
@@ -1172,10 +1502,17 @@ body.dark .js-plotly-plot .plotly .modebar-btn path { fill: var(--muted); }
     const inputString = JSON.stringify({ theta, se, tau2, k, withinVar, mcid, population, horizon, costPerPatient, discount, nSim: N_SIM, seed: SEED });
     const inputHash = await computeInputHash(inputString);
 
+    // Advanced computations
+    const sensitivityData = computeSensitivityTornado(theta, se, tau2, mcid, withinVar, population, horizon, costPerPatient, discount, N_SIM, SEED);
+    const dominanceData = computeStochasticDominance(theta, se, tau2, mcid, 5000, SEED);
+    const entropyData = computeEntropyAnalysis(theta, se, tau2, mcid, withinVar, SEED);
+    const bootstrapData = computeBayesianBootstrap(draws, mcid, 500, population, df);
+
     const results = {
       inputs: { theta, se, tau2, k, withinVar, mcid, population, horizon, costPerPatient, discount },
       draws, pWrong, grade, df, evpi, evpiPop, evppi, evsiCurve, optimal,
       nbTreat, nbNoTreat, currentDecision, inputHash,
+      sensitivityData, dominanceData, entropyData, bootstrapData,
       timestamp: new Date().toISOString()
     };
 
@@ -1185,6 +1522,7 @@ body.dark .js-plotly-plot .plotly .modebar-btn path { fill: var(--muted); }
     renderDecisionSpace(results);
     renderEvpiAnalysis(results);
     renderEvsiAnalysis(results);
+    renderAdvancedTab(results);
     renderReport(results);
     renderAllCharts(results);
 
@@ -1305,6 +1643,297 @@ body.dark .js-plotly-plot .plotly .modebar-btn path { fill: var(--muted); }
         'The maximum net benefit is ' + formatCurrency(optimal.netBenefit) + ' at N=' + formatNumber(optimal.optimalN) +
         '. Consider whether current evidence is sufficient for decision-making.</div></div>';
     }
+  }
+
+  // -------------------------------------------------------------------
+  // 6b. Advanced tab rendering
+  // -------------------------------------------------------------------
+
+  function renderAdvancedTab(results) {
+    renderAdvancedStats(results);
+  }
+
+  function renderAdvancedStats(results) {
+    var dom = results.dominanceData;
+    var ent = results.entropyData;
+    var boot = results.bootstrapData;
+
+    // Dominance stats
+    var domHtml = '<div class="stat-card">' +
+      '<div class="big-number" style="font-size:1.2rem;">' + (dom.fsdHolds ? "Yes" : "No") + '</div>' +
+      '<div class="stat-label">FSD Holds</div></div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number" style="font-size:1.2rem;">' + (dom.ssdHolds ? "Yes" : "No") + '</div>' +
+      '<div class="stat-label">SSD Holds</div></div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number" style="font-size:1.2rem;">' + dom.cvarTreat.toFixed(4) + '</div>' +
+      '<div class="stat-label">CVaR (5% Treat)</div></div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number" style="font-size:1rem;">' + escapeHtml(dom.recommendation) + '</div>' +
+      '<div class="stat-label">Recommendation</div></div>';
+    document.getElementById("dominance-stats").innerHTML = domHtml;
+
+    // Entropy stats
+    var entHtml = '<div class="stat-card">' +
+      '<div class="big-number">' + ent.decisionEntropy.toFixed(3) + '</div>' +
+      '<div class="stat-label">Decision Entropy (bits)</div></div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number">' + (ent.capacityUtilization * 100).toFixed(1) + '%</div>' +
+      '<div class="stat-label">Channel Utilization</div></div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number">' + (ent.pTreat * 100).toFixed(1) + '%</div>' +
+      '<div class="stat-label">P(Treat Optimal)</div></div>';
+    document.getElementById("entropy-stats").innerHTML = entHtml;
+
+    // Bootstrap stats
+    var bootHtml = '<div class="stat-card">' +
+      '<div class="big-number">' + formatCurrency(boot.mean) + '</div>' +
+      '<div class="stat-label">Mean EVPI (Pop)</div></div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number" style="font-size:1.2rem;">' + formatCurrency(boot.ciLow) + ' - ' + formatCurrency(boot.ciHigh) + '</div>' +
+      '<div class="stat-label">95% Credible Interval</div></div>' +
+      '<div class="stat-card">' +
+      '<div class="big-number">' + (boot.cv * 100).toFixed(1) + '%</div>' +
+      '<div class="stat-label">CV (Reliability)</div></div>';
+    document.getElementById("bootstrap-stats").innerHTML = bootHtml;
+  }
+
+  function renderAdvancedCharts(results) {
+    renderSensitivityTornadoChart(results);
+    renderDominanceCDFChart(results);
+    renderEntropyReductionChart(results);
+    renderBootstrapHistChart(results);
+  }
+
+  function renderSensitivityTornadoChart(results) {
+    var sens = results.sensitivityData;
+    var dark = isDarkMode();
+    var tornado = sens.tornado;
+
+    // Build horizontal bars: for each param, show [low, high] deviation from base
+    var paramNames = [];
+    var lowDeltas = [];
+    var highDeltas = [];
+    for (var i = tornado.length - 1; i >= 0; i--) {
+      paramNames.push(tornado[i].name);
+      lowDeltas.push(tornado[i].low - sens.baseEvpi);
+      highDeltas.push(tornado[i].high - sens.baseEvpi);
+    }
+
+    var traces = [
+      {
+        y: paramNames,
+        x: lowDeltas,
+        type: "bar",
+        orientation: "h",
+        name: "Low (-20%)",
+        marker: { color: "#0e7490" },
+        text: lowDeltas.map(function(v) { return formatCurrency(v); }),
+        textposition: "outside"
+      },
+      {
+        y: paramNames,
+        x: highDeltas,
+        type: "bar",
+        orientation: "h",
+        name: "High (+20%)",
+        marker: { color: "#0f766e" },
+        text: highDeltas.map(function(v) { return formatCurrency(v); }),
+        textposition: "outside"
+      }
+    ];
+
+    var layout = getPlotlyLayout("Sensitivity Tornado: EVPI Change from Baseline", dark);
+    layout.xaxis.title = { text: "Change in Population EVPI ($)" };
+    layout.yaxis.automargin = true;
+    layout.barmode = "group";
+    layout.showlegend = true;
+    layout.legend = { x: 0.6, y: 0.95, bgcolor: "rgba(0,0,0,0)" };
+    layout.margin.l = 180;
+
+    // Zero line
+    layout.shapes = [{
+      type: "line",
+      x0: 0, x1: 0,
+      y0: -0.5, y1: paramNames.length - 0.5,
+      line: { color: dark ? "#475569" : "#94a3b8", width: 1, dash: "dot" }
+    }];
+
+    Plotly.newPlot("chart-sensitivity-tornado", traces, layout, { responsive: true });
+  }
+
+  function renderDominanceCDFChart(results) {
+    var dom = results.dominanceData;
+    var dark = isDarkMode();
+
+    var traces = [
+      {
+        x: dom.grid,
+        y: dom.cdfTreat,
+        type: "scatter",
+        mode: "lines",
+        name: "Treat CDF",
+        line: { color: "#16a34a", width: 2.5 }
+      },
+      {
+        x: dom.grid,
+        y: dom.cdfNoTreat,
+        type: "scatter",
+        mode: "lines",
+        name: "No-treat CDF",
+        line: { color: "#dc2626", width: 2.5, dash: "dash" }
+      }
+    ];
+
+    var layout = getPlotlyLayout("Stochastic Dominance: Empirical CDFs", dark);
+    layout.xaxis.title = { text: "Net Benefit" };
+    layout.yaxis.title = { text: "Cumulative Probability" };
+    layout.showlegend = true;
+    layout.legend = { x: 0.65, y: 0.3, bgcolor: "rgba(0,0,0,0)" };
+
+    // Annotation for FSD result
+    var fsdText = dom.fsdHolds
+      ? "FSD: Treat dominates (" + (dom.fsdRatio * 100).toFixed(0) + "%)"
+      : "No FSD (holds at " + (dom.fsdRatio * 100).toFixed(0) + "% of grid)";
+    layout.annotations = [{
+      x: dom.grid[Math.floor(dom.grid.length * 0.75)],
+      y: 0.5,
+      text: fsdText,
+      showarrow: false,
+      font: { size: 12, color: dom.fsdHolds ? (dark ? "#34d399" : "#059669") : (dark ? "#fbbf24" : "#d97706") },
+      bgcolor: dark ? "rgba(30,41,59,0.8)" : "rgba(255,255,255,0.8)",
+      borderpad: 4
+    }];
+
+    Plotly.newPlot("chart-dominance-cdf", traces, layout, { responsive: true });
+  }
+
+  function renderEntropyReductionChart(results) {
+    var ent = results.entropyData;
+    var dark = isDarkMode();
+    var curve = ent.reductionCurve;
+
+    var nVals = curve.map(function(c) { return c.n; });
+    var deltaH = curve.map(function(c) { return c.deltaH; });
+    var postH = curve.map(function(c) { return c.postEntropy; });
+
+    var traces = [
+      {
+        x: nVals,
+        y: deltaH,
+        type: "scatter",
+        mode: "lines+markers",
+        name: "Entropy Reduction (bits)",
+        line: { color: "#0f766e", width: 3 },
+        marker: { size: 6 },
+        yaxis: "y"
+      },
+      {
+        x: nVals,
+        y: postH,
+        type: "scatter",
+        mode: "lines+markers",
+        name: "Residual Entropy (bits)",
+        line: { color: "#d97706", width: 2, dash: "dash" },
+        marker: { size: 5 },
+        yaxis: "y2"
+      }
+    ];
+
+    var layout = getPlotlyLayout("Decision Entropy vs Trial Size", dark);
+    layout.xaxis.title = { text: "Trial Sample Size (N)" };
+    layout.yaxis.title = { text: "Entropy Reduction (bits)" };
+    layout.yaxis2 = {
+      title: { text: "Residual Entropy (bits)" },
+      overlaying: "y",
+      side: "right",
+      gridcolor: isDarkMode() ? "#334155" : "#e2e8f0"
+    };
+    layout.showlegend = true;
+    layout.legend = { x: 0.5, y: 0.95, bgcolor: "rgba(0,0,0,0)" };
+
+    // Horizontal line at decision entropy (max reduction)
+    layout.shapes = [{
+      type: "line",
+      x0: nVals[0], x1: nVals[nVals.length - 1],
+      y0: ent.decisionEntropy, y1: ent.decisionEntropy,
+      line: { color: dark ? "#475569" : "#94a3b8", width: 1, dash: "dot" }
+    }];
+
+    layout.annotations = [{
+      x: nVals[nVals.length - 1],
+      y: ent.decisionEntropy,
+      text: "Max = " + ent.decisionEntropy.toFixed(3) + " bits",
+      showarrow: false,
+      yshift: 12,
+      font: { size: 11, color: dark ? "#94a3b8" : "#64748b" }
+    }];
+
+    Plotly.newPlot("chart-entropy-reduction", traces, layout, { responsive: true });
+  }
+
+  function renderBootstrapHistChart(results) {
+    var boot = results.bootstrapData;
+    var dark = isDarkMode();
+
+    var traces = [{
+      x: boot.distribution,
+      type: "histogram",
+      nbinsx: 40,
+      marker: {
+        color: "rgba(15,118,110,0.6)",
+        line: { color: "rgba(15,118,110,1)", width: 1 }
+      },
+      name: "Bootstrap EVPI (Pop)"
+    }];
+
+    var layout = getPlotlyLayout("Bayesian Bootstrap: EVPI Uncertainty (500 Replications)", dark);
+    layout.xaxis.title = { text: "Population EVPI ($)" };
+    layout.yaxis.title = { text: "Frequency" };
+    layout.showlegend = false;
+    layout.bargap = 0.05;
+
+    // Mark the CI and mean
+    layout.shapes = [
+      {
+        type: "line",
+        x0: boot.mean, x1: boot.mean, y0: 0, y1: 1, yref: "paper",
+        line: { color: dark ? "#34d399" : "#059669", width: 2 }
+      },
+      {
+        type: "line",
+        x0: boot.ciLow, x1: boot.ciLow, y0: 0, y1: 1, yref: "paper",
+        line: { color: dark ? "#fbbf24" : "#d97706", width: 1.5, dash: "dash" }
+      },
+      {
+        type: "line",
+        x0: boot.ciHigh, x1: boot.ciHigh, y0: 0, y1: 1, yref: "paper",
+        line: { color: dark ? "#fbbf24" : "#d97706", width: 1.5, dash: "dash" }
+      }
+    ];
+
+    layout.annotations = [
+      {
+        x: boot.mean, y: 1, yref: "paper",
+        text: "Mean = " + formatCurrency(boot.mean),
+        showarrow: false, yshift: 12,
+        font: { size: 11, color: dark ? "#34d399" : "#059669" }
+      },
+      {
+        x: boot.ciLow, y: 0.92, yref: "paper",
+        text: "2.5%",
+        showarrow: false, xshift: -20,
+        font: { size: 10, color: dark ? "#fbbf24" : "#d97706" }
+      },
+      {
+        x: boot.ciHigh, y: 0.92, yref: "paper",
+        text: "97.5%",
+        showarrow: false, xshift: 20,
+        font: { size: 10, color: dark ? "#fbbf24" : "#d97706" }
+      }
+    ];
+
+    Plotly.newPlot("chart-bootstrap-hist", traces, layout, { responsive: true });
   }
 
   async function renderReport(results) {
@@ -1444,6 +2073,7 @@ body.dark .js-plotly-plot .plotly .modebar-btn path { fill: var(--muted); }
     renderEvppiChart(results);
     renderEvsiChart(results);
     renderNetBenefitCurveChart(results);
+    if (results.sensitivityData) renderAdvancedCharts(results);
   }
 
   function renderPosteriorChart(results) {

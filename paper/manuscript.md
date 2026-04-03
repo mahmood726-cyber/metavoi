@@ -6,7 +6,7 @@
 
 **Corresponding author:** [CORRESPONDING AUTHOR NAME], [DEPARTMENT], [INSTITUTION], [ADDRESS]. Email: [EMAIL]
 
-**Word count:** ~3,500
+**Word count:** ~5,000
 
 **Target journal:** Medical Decision Making (Software Article)
 
@@ -18,11 +18,11 @@
 
 **Objective.** We developed MetaVoI, an open-source tool that computes VoI metrics directly from MA summary statistics, using the MA posterior as the decision model.
 
-**Methods.** MetaVoI accepts five summary inputs from any random-effects MA---pooled effect estimate (theta), its standard error (SE), between-study variance (tau-squared), number of studies (k), and a minimal clinically important difference (MCID)---and computes: (1) Expected Value of Perfect Information (EVPI) via Monte Carlo integration over 10,000 predictive posterior draws; (2) Expected Value of Partial Perfect Information (EVPPI) for theta and tau-squared using nested simulation; (3) Expected Value of Sample Information (EVSI) via Bayesian preposterior moment-matching across a grid of hypothetical trial sizes; (4) optimal and break-even trial sample sizes by net benefit maximization; and (5) a GRADE certainty bridge mapping the probability of a wrong decision to GRADE-like certainty levels. All outputs carry hash-linked provenance certificates.
+**Methods.** MetaVoI accepts five summary inputs from any random-effects MA---pooled effect estimate (theta), its standard error (SE), between-study variance (tau-squared), number of studies (k), and a minimal clinically important difference (MCID)---and computes: (1) Expected Value of Perfect Information (EVPI) via Monte Carlo integration over 10,000 predictive posterior draws; (2) Expected Value of Partial Perfect Information (EVPPI) for theta and tau-squared using nested simulation; (3) Expected Value of Sample Information (EVSI) via Bayesian preposterior moment-matching across a grid of hypothetical trial sizes; (4) optimal and break-even trial sample sizes by net benefit maximization; and (5) a GRADE certainty bridge mapping the probability of a wrong decision to GRADE-like certainty levels. Version 2.0 extends the core with 15 advanced modules organized into five tiers: enhanced VoI (GP-EVPPI, multi-arm decision, sequential Bellman), decision analysis (minimax regret, probabilistic sensitivity via PRCC, importance sampling EVSI), information theory (Fisher information, D/A-optimal design, Bayesian bootstrap), advanced decision methods (variational Bayes CAVI, stochastic dominance with CVaR, multi-criteria TOPSIS), and frontier methods (kernel RKHS with MMD, martingale e-values, entropy-based VoI decomposition). All outputs carry hash-linked provenance certificates.
 
 **Results.** We illustrate MetaVoI using the BCG vaccine meta-analysis (13 RCTs, log risk ratio = -0.71, tau-squared = 0.31). Despite a pooled effect favoring vaccination, the probability of a wrong decision was 18.4%, yielding EVPI of 893,017 net-benefit units over a 20-year horizon for a population of 1 million. EVPPI analysis showed that 99.8% of decision uncertainty was attributable to heterogeneity (tau-squared) rather than the pooled effect. The GRADE bridge classified certainty as Moderate. The optimal next trial enrolled approximately 100 patients, with a break-even sample size of 2,000.
 
-**Conclusions.** MetaVoI bridges the gap between meta-analysis production and research prioritization by eliminating the need for a bespoke decision model. It is freely available as both a Python library and a single-file browser application requiring no installation.
+**Conclusions.** MetaVoI bridges the gap between meta-analysis production and research prioritization by eliminating the need for a bespoke decision model. With 20 modules validated by 118 automated tests, it is freely available as both a Python library and a single-file browser application requiring no installation.
 
 **Keywords:** value of information, meta-analysis, expected value of perfect information, research prioritization, GRADE, trial planning
 
@@ -142,6 +142,50 @@ This mapping is computed dynamically from the posterior distribution rather than
 
 Each MetaVoI analysis produces a provenance certificate containing: (1) a SHA-256 hash of all input parameters (theta, SE, tau^2, k, MCID, population, horizon, cost, discount rate, simulation count, seed); (2) the number of Monte Carlo simulations; and (3) a certification status (PASS if M >= 5,000; WARN if 1,000 <= M < 5,000; REJECT if M < 1,000). This certificate enables independent reproduction: given the same input hash and seed, any implementation of the algorithm must produce identical results.
 
+## Advanced Statistical Methods
+
+Version 2.0 extends MetaVoI from 5 core modules (posterior, EVPI, EVPPI, EVSI, optimal sizing) to 20 modules spanning five methodological tiers. Each tier addresses a distinct limitation of the baseline framework.
+
+### Tier 1: Enhanced VoI
+
+**GP-EVPPI (Strong-Oakley).** The core EVPPI uses a residual approach assuming additive separability. The GP-EVPPI module replaces this with non-parametric Gaussian Process regression [14], fitting a squared-exponential kernel GP to E[NB | parameter] for more accurate decompositions when theta and tau-squared interact non-linearly.
+
+**Multi-arm decision VoI.** The binary framework extends to K alternatives, each with its own effect, SE, and cost. Multi-arm EVPI is computed over K-dimensional predictive draws, enabling VoI for network meta-analysis contexts.
+
+**Sequential VoI (Bellman).** A finite-horizon dynamic programming formulation where the decision-maker iteratively decides to gather more evidence or commit to treatment. Backward induction identifies the optimal stopping rule and the value of waiting.
+
+### Tier 2: Decision Analysis
+
+**Minimax regret.** For each decision d, regret R(d, theta) = max_{d'} NB(d', theta) - NB(d, theta). The minimax-optimal decision minimizes worst-case regret across all plausible theta, providing robust recommendations for ambiguity-averse decision-makers. Expected regret equals EVPI, serving as a consistency check.
+
+**Probabilistic sensitivity analysis (PRCC).** Joint perturbations of theta, tau-squared, MCID, and population size are drawn, EVPI computed for each sample, and Partial Rank Correlation Coefficients estimated via rank-transformed partial correlation. This identifies which inputs most influence the VoI conclusion, presented as tornado diagrams.
+
+**Importance sampling EVSI (Heath 2020).** The analytic posterior-update approach of Heath et al. [12] draws hypothetical trial results and performs exact Bayesian precision-weighted updates, producing more accurate EVSI estimates than moment-matching, particularly for small trial sizes.
+
+### Tier 3: Information Theory
+
+**Fisher information and Cramer-Rao bound.** The observed Fisher information matrix for (theta, tau-squared) establishes a lower bound on estimation variance. The module computes the Cramer-Rao bound on VoI precision and an effective sample size accounting for heterogeneity-induced information loss.
+
+**D/A-optimal trial design.** D-optimal (maximize determinant of posterior Fisher information) and A-optimal (minimize trace of inverse) allocations distribute trial resources across sites with varying costs and variances. A Neyman-type formula maximizes information gain per dollar, with knee-point detection identifying diminishing returns.
+
+**Bayesian bootstrap VoI uncertainty.** Dirichlet-weighted resamplings (Rubin, 1981) of predictive draws produce a full posterior distribution over EVPI and EVSI. Outputs include 95% credible intervals, the coefficient of variation, and the probability that population EVPI exceeds trial cost.
+
+### Tier 4: Advanced Decision Methods
+
+**Variational Bayes (CAVI).** A mean-field approximation q(theta) = N(mu_q, sigma_q^2), q(tau^2) = InvGamma(a_q, b_q) fitted via Coordinate Ascent Variational Inference yields a deterministic VB-EVPI orders of magnitude faster than Monte Carlo, with ELBO convergence monitoring and calibration checks.
+
+**Stochastic dominance (FSD/SSD/CVaR).** Tests whether treat first-order (FSD) or second-order (SSD) stochastic dominates no-treat across the full net benefit range, with Value-at-Risk and Conditional VaR for tail risk quantification in safety-critical contexts.
+
+**Multi-criteria TOPSIS and Pareto.** Per-outcome EVPI and EVSI computations, Pareto frontier identification across trial sizes, and TOPSIS ranking with user-specified outcome weights support decisions involving multiple endpoints (e.g., efficacy and safety).
+
+### Tier 5: Frontier Methods
+
+**Kernel RKHS and MMD.** Prior and posterior distributions are embedded in a Reproducing Kernel Hilbert Space using Gaussian kernels with median-heuristic bandwidth. Maximum Mean Discrepancy (MMD) provides a non-parametric, distribution-free measure of information gain, and kernel regression yields a non-parametric EVPPI estimator.
+
+**Martingale e-values and Ville's inequality.** GROW-optimal e-values (Grunwald et al., 2020) form a test supermartingale under H0: theta >= MCID. The product e-process provides anytime-valid inference via Ville's inequality, enabling continuous evidence monitoring without alpha-spending corrections.
+
+**Entropy-based VoI decomposition.** Decision entropy H(D) in bits decomposes by parameter via mutual information I(D; theta) and I(D; tau^2). The entropy reduction curve shows H(D) decreasing with trial size, complementing monetary EVSI with an information-theoretic perspective. Channel capacity utilization measures how close current evidence is to resolving the decision.
+
 ## Illustrative Example: BCG Vaccine Meta-Analysis
 
 ### Data
@@ -170,21 +214,20 @@ To illustrate the opposite scenario, we analyzed a statin meta-analysis (5 RCTs,
 
 MetaVoI consists of two components that share identical statistical logic:
 
-1. **Python library** (`metavoi/`, 8 modules). Pure-function design with numpy as the sole dependency. The `pipeline.py` orchestrator accepts a `VoIInput` dataclass and returns a `VoIResult` dataclass containing all VoI metrics, the EVSI curve, GRADE mapping, and provenance certificate. The modular architecture separates posterior sampling (`posterior.py`), EVPI (`evpi.py`), EVPPI (`evppi.py`), EVSI (`evsi.py`), optimal trial sizing (`optimal.py`), GRADE bridging (`grade_bridge.py`), and certification (`certifier.py`).
+1. **Python library** (`metavoi/`, 20 modules). Pure-function design with numpy and scipy as the primary dependencies. The `pipeline.py` orchestrator accepts a `VoIInput` dataclass and returns a `VoIResult` dataclass containing all VoI metrics, the EVSI curve, GRADE mapping, and provenance certificate. The core architecture comprises posterior sampling (`posterior.py`), EVPI (`evpi.py`), EVPPI (`evppi.py`), EVSI (`evsi.py`), optimal trial sizing (`optimal.py`), GRADE bridging (`grade_bridge.py`), and certification (`certifier.py`). Fifteen advanced modules extend the framework across five tiers: enhanced VoI (`gp_evppi.py`, `multi_decision.py`, `sequential_voi.py`), decision analysis (`regret.py`, `sensitivity_analysis.py`, `importance_evsi.py`), information theory (`fisher_information.py`, `optimal_design.py`, `bayesian_bootstrap.py`), advanced decision methods (`variational_bayes.py`, `stochastic_dominance.py`, `multi_criteria.py`), and frontier methods (`kernel_voi.py`, `martingale.py`, `entropy_voi.py`).
 
-2. **Browser application** (`app/metavoi.html`, 1,759 lines). A single-file HTML application with JavaScript reimplementing the Python logic and Plotly.js for interactive visualization. It requires no installation, server, or internet connection after initial download. The interface is organized into five tabs: (i) Setup---input parameters with three built-in examples; (ii) EVPI---population-level EVPI and posterior density plot; (iii) EVPPI---tornado chart decomposing uncertainty by parameter; (iv) EVSI/Optimal---EVSI curve with cost overlay, optimal and break-even markers; and (v) GRADE---certainty classification and exportable report.
+2. **Browser application** (`app/metavoi.html`). A single-file HTML application with JavaScript reimplementing the Python logic and Plotly.js for interactive visualization. It requires no installation, server, or internet connection after initial download. The interface is organized into six tabs: (i) Setup---input parameters with three built-in examples; (ii) Decision Space---posterior density plot and net benefit comparison; (iii) EVPI Analysis---population-level EVPI and EVPPI tornado chart; (iv) Trial Planning---EVSI curve with cost overlay, optimal and break-even markers; (v) Report and Certify---structured text report and TruthCert JSON bundle; and (vi) Advanced---sensitivity tornado diagram, stochastic dominance CDFs, entropy gauge with reduction curve, and Bayesian bootstrap EVPI uncertainty histogram.
 
 ### Validation
 
-The Python library is validated by 43 automated tests (pytest) covering:
+The Python library is validated by 118 automated tests (pytest) organized by module:
 
-- **Posterior module** (9 tests): predictive distribution mean and variance match inputs; P(wrong) converges to 0 for certain evidence and 0.5 when theta equals MCID; discount factor correctness.
-- **EVPI module** (6 tests): non-negativity; monotonic increase with uncertainty; linear population scaling; upper bound by maximum net benefit.
-- **EVPPI module** (5 tests): non-negativity of both components; sum bounded by total EVPI; theta dominance under low heterogeneity; fraction in [0, 1].
-- **EVSI module** (6 tests): non-negativity; monotonic increase with trial size (within Monte Carlo tolerance); bounded by EVPI; near zero for certain evidence; curve completeness.
-- **Optimal N module** (4 tests): existence of optimum; positive net benefit at optimum; break-even exceeds optimal N.
-- **GRADE bridge** (6 tests): correct mapping at all four certainty levels; boundary behavior; recommendation text generation.
-- **Pipeline integration** (8 tests): end-to-end execution; decision validity; EVPI positivity for uncertain inputs and near-zero for certain inputs; certification status; hash generation.
+- **Core modules** (44 tests): posterior (9), EVPI (6), EVPPI (5), EVSI (6), optimal N (4), GRADE bridge (6), pipeline integration (8).
+- **Enhanced VoI** (20 tests): GP-EVPPI regression accuracy and kernel properties (5), multi-arm EVPI with 2--4 alternatives and dominance detection (10), sequential VoI backward induction and stopping rules (5).
+- **Decision analysis** (15 tests): minimax regret consistency with EVPI and robustness ranking (5), PRCC sensitivity coefficients and tornado ordering (5), importance sampling EVSI convergence and comparison with moment-matching (5).
+- **Information theory** (15 tests): Fisher information matrix symmetry and Cramer-Rao bounds (5), D/A-optimal design feasibility and budget constraints (5), Bayesian bootstrap credible intervals and CV reliability (5).
+- **Advanced decision** (15 tests): variational Bayes ELBO convergence and VB-EVPI calibration (5), stochastic dominance FSD/SSD testing and CVaR computation (5), multi-criteria TOPSIS ranking and Pareto non-dominance (5).
+- **Frontier methods** (9 tests): kernel MMD convergence and RKHS embedding (3), martingale e-value validity and Ville's inequality (3), entropy decomposition and channel capacity (3).
 
 All tests use deterministic seeds and pass on Python 3.13 (Windows, macOS, Linux).
 
@@ -228,7 +271,7 @@ Several limitations should be noted. First, the binary decision framework assume
 
 ### Future Directions
 
-Planned extensions include: (1) network meta-analysis VoI for multi-treatment comparisons; (2) integration with living meta-analysis platforms for real-time research prioritization; (3) formal sensitivity analysis over MCID ranges; and (4) connection to trial registries (ClinicalTrials.gov) to flag ongoing trials that may resolve identified uncertainty.
+The 15 advanced modules introduced in version 2.0 address several of the originally planned extensions, including multi-arm decision VoI (extending toward network meta-analysis), formal probabilistic sensitivity analysis, and sequential evidence monitoring. Remaining planned extensions include: (1) full network meta-analysis VoI with consistency/inconsistency decomposition; (2) integration with living meta-analysis platforms for real-time research prioritization; (3) connection to trial registries (ClinicalTrials.gov) to flag ongoing trials that may resolve identified uncertainty; and (4) extension of the variational Bayes module to non-conjugate priors via stochastic variational inference.
 
 ## Conclusions
 
@@ -277,6 +320,8 @@ All source code, test data, and the browser application are available at [REPOSI
 12. Heath A, Manolopoulou I, Baio G. Estimating the expected value of sample information across different sample sizes using moment matching and nonlinear regression. *Med Decis Making*. 2019;39(4):347-359.
 
 13. Welton NJ, Caldwell DM, Adamopoulos E, Vedhara K. Mixed treatment comparison meta-analysis of complex interventions: psychological interventions in coronary heart disease. *Am J Epidemiol*. 2009;169(9):1158-1165.
+
+14. Strong M, Oakley JE, Brennan A. Estimating multiparameter partial expected value of perfect information from a probabilistic sensitivity analysis sample: a nonparametric regression approach. *Med Decis Making*. 2014;34(3):311-326.
 
 ---
 
