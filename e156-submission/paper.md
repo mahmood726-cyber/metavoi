@@ -1,6 +1,6 @@
 Mahmood Ahmad
 Tahir Heart Institute
-author@example.com
+mahmood.ahmad2@nhs.net
 
 MetaVoI: Value of Information Analysis Directly from Meta-Analysis Output
 
