@@ -49,7 +49,7 @@ print(f"GRADE certainty: {result.implied_certainty}")
 
 ## Citation
 
-AUTHOR_PLACEHOLDER. MetaVoI: Value of Information from Meta-Analysis. 2026.
+Mahmood Ahmad. MetaVoI: Value of Information from Meta-Analysis. 2026.
 
 ## License
 
