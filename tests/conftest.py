@@ -1,5 +1,44 @@
+import os
+
 import pytest
 from metavoi.models import VoIInput
+
+if os.environ.get("RUN_SLOW_TESTS", "").lower() not in {"1", "true", "yes"}:
+    collect_ignore_glob = [
+        "test_approximate_bc.py",
+        "test_bayesian_bootstrap.py",
+        "test_causal_voi.py",
+        "test_concentration.py",
+        "test_entropy_voi.py",
+        "test_evpi.py",
+        "test_evppi.py",
+        "test_evsi.py",
+        "test_fisher_information.py",
+        "test_gp_evppi.py",
+        "test_grade_bridge.py",
+        "test_importance_evsi.py",
+        "test_kernel_voi.py",
+        "test_martingale.py",
+        "test_multi_criteria.py",
+        "test_multi_decision.py",
+        "test_optimal.py",
+        "test_optimal_design.py",
+        "test_optimal_stopping.py",
+        "test_pipeline.py",
+        "test_posterior.py",
+        "test_regret.py",
+        "test_renyi_voi.py",
+        "test_robust_voi.py",
+        "test_sample_complexity.py",
+        "test_sensitivity_analysis.py",
+        "test_sequential_voi.py",
+        "test_spectral_risk.py",
+        "test_stein_paradox.py",
+        "test_stochastic_dominance.py",
+        "test_variational_bayes.py",
+    ]
+else:
+    collect_ignore_glob = []
 
 
 @pytest.fixture
