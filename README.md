@@ -1,6 +1,6 @@
 # MetaVoI — Value of Information from Meta-Analysis
 
-**World-first** browser-based tool that computes Value of Information (VoI) directly from meta-analysis output. Answers: *"Is there enough evidence, or should we fund another trial?"*
+A browser-based tool that computes Value of Information (VoI) directly from meta-analysis output. Answers: *"Is there enough evidence, or should we fund another trial?"*
 
 ## Quick Start
 
@@ -42,7 +42,7 @@ print(f"GRADE certainty: {result.implied_certainty}")
 
 ## Validation
 
-- 43 pytest tests (posterior, EVPI, EVPPI, EVSI, optimal, GRADE, pipeline)
+- 165 pytest tests (posterior, EVPI, EVPPI, EVSI, optimal, GRADE, pipeline, and extended VoI methods); the full suite runs with `RUN_SLOW_TESTS=1`
 - Monte Carlo convergence verified (10,000 simulations, seed=42)
 - EVSI bounded by EVPI (mathematical property)
 - GRADE thresholds calibrated to published certainty criteria
