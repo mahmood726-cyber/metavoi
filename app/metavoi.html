@@ -602,6 +602,24 @@ body.dark .js-plotly-plot .plotly .modebar-btn path { fill: var(--muted); }
     </div>
     <pre class="report-pre" id="report-json" tabindex="0">Run a VoI analysis to generate the certification bundle.</pre>
   </div>
+  <div class="panel">
+    <h2>Verify in R</h2>
+    <p style="font-size:0.88rem; color:var(--muted); margin-bottom:0.5rem;">
+      Recomputes every number this page displays, in R, from the inputs of the last <em>Compute VoI</em>.
+      Base R regenerates the page's seeded xoshiro128** draws exactly, so the page and R must agree to 1e-9;
+      the script then cross-checks against the normal&ndash;normal closed forms and, where installed, voi, BCEA and metafor.
+      Each line prints page value, R value, difference and MATCH or MISMATCH. The full run takes about 25 s in desktop R and one to two minutes in WebR
+      (the Bayesian bootstrap regenerates 25 million uniforms).
+    </p>
+    <div class="btn-group" style="margin-bottom:1rem;">
+      <button class="btn btn-secondary btn-small" id="btnDownloadR">Download R script</button>
+      <button class="btn btn-secondary btn-small" id="btnVerifyR">Verify in R (WebR)</button>
+      <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.3rem;">
+        <input type="checkbox" id="chkVerifyPkgs" checked> also load voi + BCEA (+ metafor) in WebR for the cross-check
+      </label>
+    </div>
+    <pre class="report-pre" id="r-verify-out" tabindex="0">Run a VoI analysis, then download the R script or verify in R here.</pre>
+  </div>
 </div>
 
 <!-- Tab 6: Advanced -->
@@ -639,6 +657,322 @@ body.dark .js-plotly-plot .plotly .modebar-btn path { fill: var(--muted); }
   </div>
 </div>
 
+<script type="text/plain" id="metavoi-r-template">
+## ---------------------------------------------------------------------------
+## Everything below is fixed code; the lines above it were written by the page.
+## It needs base R only (stats is part of base R). voi, BCEA and metafor are
+## used for the cross-check if installed and are reported NOT CHECKED if not.
+## Run:  Rscript metavoi-verify.R      (exit status 0 = every check matched)
+## ---------------------------------------------------------------------------
+
+cat("MetaVoI: verify the page's numbers in R\n")
+cat(R.version.string, "\n")
+cat("Page result generated:", page$timestamp, " input hash:", page$inputHash, "\n\n")
+
+## ---- 1. xoshiro128** exactly as the page runs it -----------------------------
+## Each 32-bit state word is held as two 16-bit integer halves, so every
+## operation is exact. Long streams are cut into lanes; each lane's start state
+## is found by GF(2) jump-ahead (the generator is linear over GF(2)), and the
+## lanes are stepped together as vectors. Uniform i of a stream is identical to
+## the i-th value of the page's rng.next().
+bx <- bitwXor; ba <- bitwAnd; bl <- bitwShiftL; br <- bitwShiftR
+xo_xor_d <- function(a, b) { ah <- floor(a/65536); bh <- floor(b/65536)
+  65536*bx(as.integer(ah), as.integer(bh)) + bx(as.integer(a - ah*65536), as.integer(b - bh*65536)) }
+xo_seed <- function(seed) { s0 <- seed %% 2^32
+  c(s0, xo_xor_d(s0, 1812433253), xo_xor_d(s0, 1900724961), xo_xor_d(s0, 1223154773)) }
+xo_bits <- function(S) { out <- matrix(0, nrow(S), 128)
+  for (w in 1:4) { x <- S[, w]; for (b in 1:32) { out[, (w-1)*32 + b] <- x %% 2; x <- floor(x/2) } }
+  out }
+xo_words <- function(B) { p <- 2^(0:31)
+  matrix(vapply(1:4, function(w) as.vector(B[, ((w-1)*32+1):(w*32), drop = FALSE] %*% p), numeric(nrow(B))), ncol = 4) }
+xo_step_d <- function(S) { s0 <- S[,1]; s1 <- S[,2]; s2 <- S[,3]; s3 <- S[,4]; t <- (s1 %% 2^23)*512
+  s2 <- xo_xor_d(s2, s0); s3 <- xo_xor_d(s3, s1); s1 <- xo_xor_d(s1, s2); s0 <- xo_xor_d(s0, s3)
+  s2 <- xo_xor_d(s2, t); s3 <- (s3 %% 2^21)*2^11 + floor(s3/2^21); cbind(s0, s1, s2, s3) }
+.xo <- new.env()
+xo_T <- function() { if (is.null(.xo$T)) .xo$T <- xo_bits(xo_step_d(xo_words(diag(128)))); .xo$T }
+xo_jump <- function(n) { J <- diag(128); P <- xo_T()
+  while (n > 0) { if (n %% 2 == 1) J <- (J %*% P) %% 2; n <- floor(n/2); if (n > 0) P <- (P %*% P) %% 2 }
+  J }
+## start states of M lanes, lane m beginning at offset + (m-1)*L
+xo_starts <- function(seed, L, M, offset = 0) {
+  B <- matrix(0, M, 128); B[1, ] <- xo_bits(matrix(xo_seed(seed), 1))
+  if (offset > 0) B[1, ] <- (B[1, , drop = FALSE] %*% xo_jump(offset)) %% 2
+  if (M > 1) { J <- xo_jump(L); for (m in 2:M) B[m, ] <- (B[m-1, , drop = FALSE] %*% J) %% 2 }
+  xo_words(B) }
+## step all lanes L times; sink(j, u) receives the j-th uniform of every lane
+xo_run <- function(S, L, sink) {
+  hi <- function(x) as.integer(floor(x/65536)); lo <- function(x) as.integer(x %% 65536)
+  h0 <- hi(S[,1]); l0 <- lo(S[,1]); h1 <- hi(S[,2]); l1 <- lo(S[,2])
+  h2 <- hi(S[,3]); l2 <- lo(S[,3]); h3 <- hi(S[,4]); l3 <- lo(S[,4])
+  for (j in seq_len(L)) {
+    q <- l1*5L; ml <- ba(q, 65535L); mh <- ba(h1*5L + br(q, 16L), 65535L)           # imul(s1, 5)
+    rh <- ba(bx(bl(mh, 7L), br(ml, 9L)), 65535L); rl <- ba(bx(bl(ml, 7L), br(mh, 9L)), 65535L)  # rotl 7
+    q <- rl*9L                                                                       # imul(., 9)
+    sink(j, (ba(rh*9L + br(q, 16L), 65535L)*65536 + ba(q, 65535L))/4294967296)
+    th <- ba(bx(bl(h1, 9L), br(l1, 7L)), 65535L); tl <- ba(bl(l1, 9L), 65535L)     # t = s1 << 9
+    h2 <- bx(h2, h0); l2 <- bx(l2, l0); h3 <- bx(h3, h1); l3 <- bx(l3, l1)
+    h1 <- bx(h1, h2); l1 <- bx(l1, l2); h0 <- bx(h0, h3); l0 <- bx(l0, l3)
+    h2 <- bx(h2, th); l2 <- bx(l2, tl)
+    nh <- ba(bx(bl(h3, 11L), br(l3, 5L)), 65535L); l3 <- ba(bx(bl(l3, 11L), br(h3, 5L)), 65535L); h3 <- nh  # rotl 11
+  }
+}
+xo_uniforms <- function(seed, n, offset = 0, L = 256) {
+  M <- ceiling(n/L); out <- matrix(0, L, M)
+  xo_run(xo_starts(seed, L, M, offset), L, function(j, u) out[j, ] <<- u)
+  as.vector(out)[seq_len(n)] }
+## Marsaglia polar method as the page codes it (second deviate discarded):
+## every attempt consumes two consecutive uniforms, so normal i is the i-th
+## accepted pair of the uniform stream.
+xo_normals <- function(seed, n) {
+  out <- numeric(); offset <- 0
+  while (length(out) < n) {
+    count <- 2*ceiling((n - length(out))*1.35 + 32)
+    u <- 2*xo_uniforms(seed, count, offset) - 1; offset <- offset + count
+    a <- u[seq.int(1, count, 2)]; b <- u[seq.int(2, count, 2)]; s2 <- a*a + b*b
+    keep <- !(s2 >= 1 | s2 == 0)
+    out <- c(out, a[keep]*sqrt(-2*log(s2[keep])/s2[keep]))
+  }
+  out[seq_len(n)] }
+
+## JavaScript arithmetic helpers: left-to-right double sums (R's sum() and
+## mean() accumulate in long double, the page does not).
+js_sum <- function(x) { s <- 0; for (v in x) s <- s + v; s }
+js_mean <- function(x) js_sum(x)/length(x)
+js_round <- function(x) floor(x + 0.5)
+fixed <- function(x, d) sprintf(paste0("%.", d, "f"), x)
+fmt_cur <- function(v) {
+  if (abs(v) >= 1e9) paste0("$", fixed(v/1e9, 2), "B") else if (abs(v) >= 1e6) paste0("$", fixed(v/1e6, 2), "M")
+  else if (abs(v) >= 1e3) paste0("$", fixed(v/1e3, 1), "K") else paste0("$", fixed(v, 0)) }
+fmt_num <- function(v) format(v, big.mark = ",", scientific = FALSE, trim = TRUE)
+fmt_pct1 <- function(v) paste0(fixed(v*100, 1), "%")
+
+## ---- 2. the page's inputs, parsed again by R ---------------------------------
+num <- function(s) suppressWarnings(as.numeric(trimws(s)))
+if (mode == "study") {
+  lines <- strsplit(trimws(studydata), "\n", fixed = TRUE)[[1]]
+  yi <- numeric(); vi <- numeric()
+  for (line in trimws(lines)) {
+    if (!nzchar(line) || startsWith(line, "#")) next
+    parts <- strsplit(line, ",", fixed = TRUE)[[1]]
+    if (length(parts) < 2) next
+    y <- num(parts[1]); v <- num(parts[2])
+    if (!is.finite(y) || !is.finite(v) || v <= 0) next
+    yi <- c(yi, y); vi <- c(vi, v)
+  }
+  if (length(yi) < 2) stop("Need at least 2 studies with valid yi, vi values.")
+  ## DerSimonian-Laird, as the page computes it
+  k <- length(yi); w <- 1/vi; sw <- js_sum(w); thFE <- js_sum(w*yi)/sw
+  Q <- js_sum(w*(yi - thFE)^2); C <- sw - js_sum(w*w)/sw
+  tau2_r <- max(0, (Q - (k - 1))/C); wr <- 1/(vi + tau2_r)
+  x <- list(theta = js_sum(wr*yi)/js_sum(wr), se = sqrt(1/js_sum(wr)), tau2 = tau2_r, k = k,
+            withinVar = k/js_sum(1/vi))   # the page's "typical within-study variance" (harmonic mean of vi)
+} else {
+  x <- list(theta = num(raw$theta), se = num(raw$se), tau2 = num(raw$tau2), k = num(raw$k), withinVar = num(raw$withinVar))
+}
+x$mcid <- num(raw$mcid); x$population <- num(raw$population); x$horizon <- num(raw$horizon)
+x$costPerPatient <- num(raw$cost); x$discount <- num(raw$discount)
+if (!all(vapply(x, function(v) length(v) == 1 && is.finite(v), logical(1)))) stop("An input is not a finite number.")
+
+## ---- 3. recompute every quantity with the page's seeds -------------------------
+N_SIM <- 50000; SEED <- 42
+th <- x$theta; se <- x$se; tau2 <- x$tau2; mc <- x$mcid; V <- se*se + tau2; s <- sqrt(V); d <- mc - th
+discount_factor <- function(rate, years) { if (rate <= 0) return(years); if (years <= 0) return(0); js_sum(1/(1 + rate)^(0:(years - 1))) }
+evpi_of <- function(nb) js_sum(pmax(nb, 0))/length(nb) - max(js_sum(nb)/length(nb), 0)
+t_start <- proc.time()[["elapsed"]]
+z42 <- xo_normals(SEED, N_SIM); draws <- th + s*z42; nb <- mc - draws
+p_wrong <- mean((draws < mc) != (js_mean(draws) < mc))
+lev <- 1 + sum(p_wrong >= c(.05, .20, .40))
+grade <- c("HIGH", "MODERATE", "LOW", "VERY LOW")[lev]
+recommendation <- c("Strong recommendation warranted", "Conditional recommendation; consider VoI",
+                    "Further research likely valuable", "Further research essential before decision")[lev]
+df <- discount_factor(x$discount, floor(x$horizon)); scale <- x$population*df
+evpi <- evpi_of(nb); evpi_pop <- evpi*scale
+## EVPPI: full predictive stream seed 142, theta stream seed 1142 (the page's seed + 100, + 1000)
+evpi_full <- evpi_of(mc - (th + s*xo_normals(SEED + 100, N_SIM)))
+nbtheta <- mc - (th + se*xo_normals(SEED + 1100, N_SIM)); evppi_theta <- evpi_of(nbtheta)
+evppi_tau2 <- max(evpi_full - evppi_theta, 0)
+theta_frac <- if (evppi_theta + evppi_tau2 > 0) evppi_theta/(evppi_theta + evppi_tau2) else 0.5
+dominant <- if (theta_frac >= 0.5) "treatment effect" else "heterogeneity"
+## EVSI: trial size i uses seed 242 + 7i, draws alternate (true effect, trial result)
+grid <- c(10, 20, 50, 100, 150, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 5000, 7500, 10000, 15000, 20000)
+evsi <- numeric(18); evsi_mcse <- numeric(18)
+for (i in seq_along(grid)) {
+  N <- grid[i]; z <- xo_normals(SEED + 200 + 7*(i - 1), 2*N_SIM)
+  truth <- th + s*z[seq.int(1, 2*N_SIM, 2)]; obs <- truth + sqrt(x$withinVar/N)*z[seq.int(2, 2*N_SIM, 2)]
+  pp <- 1/V; tp <- N/x$withinVar
+  val <- pmax(mc - (pp*th + tp*obs)/(pp + tp), 0)
+  evsi[i] <- max(js_sum(val)/N_SIM - max(mc - th, 0), 0); evsi_mcse[i] <- sd(val)/sqrt(N_SIM)
+}
+evsi_pop <- evsi*x$population*df; cost <- grid*x$costPerPatient; netb <- evsi_pop - cost
+best <- 1; for (i in seq_along(grid)) if (netb[i] > netb[best]) best <- i
+be <- NA
+for (i in 2:18) if (netb[i-1] >= 0 && netb[i] < 0) be <- js_round(grid[i-1] + (grid[i] - grid[i-1])*netb[i-1]/(netb[i-1] - netb[i]))
+if (is.na(be) && netb[18] >= 0) be <- grid[18]
+if (is.na(be) && netb[1] < 0 && any(netb > 0)) for (i in 2:18) if (netb[i-1] < 0 && netb[i] >= 0) {
+  be <- js_round(grid[i-1] + (grid[i] - grid[i-1])*(-netb[i-1])/(netb[i] - netb[i-1])); break }
+verdict <- if (netb[best] > 0) "Further Research is Worthwhile" else "Further Research May Not Be Cost-Effective"
+## Tornado: common random numbers, seed 1041, 2,000 draws in every evaluation
+tz <- xo_normals(SEED + 999, 2000)
+tev <- function(t_, t2, m_, pop) evpi_of(m_ - (t_ + sqrt(se*se + t2)*tz))*pop*discount_factor(x$discount, floor(x$horizon))
+t_base <- tev(th, tau2, mc, x$population)
+torn <- list()
+for (f in c("theta", "tau2", "mcid", "population")) {
+  bv <- x[[f]]; b <- if (abs(bv) < 1e-12) bv + c(-.1, .1) else sort(bv*c(.8, 1.2))
+  ev <- vapply(b, function(v) {
+    a <- list(theta = th, tau2 = tau2, mcid = mc, population = x$population)
+    a[[f]] <- if (f == "tau2") max(v, 0) else if (f == "population") max(v, 1) else v
+    tev(a$theta, a$tau2, a$mcid, a$population) }, numeric(1))
+  torn[[f]] <- ev - t_base
+}
+## Stochastic dominance: seed 72, 5,000 draws
+dnb <- mc - (th + s*xo_normals(SEED + 30, 5000)); srt <- sort(dnb)
+xmin <- min(srt, 0); xmax <- max(srt, 0); margin <- 0.05*(xmax - xmin); if (margin < 0.01) margin <- 0.1
+step <- (xmax + margin - (xmin - margin))/299; g <- xmin - margin + (0:299)*step
+ct <- findInterval(g, srt)/5000; cn <- as.numeric(g >= 0); dx <- g[2] - g[1]
+fsd <- all(ct <= cn + 1e-6); fsd_ratio <- sum(ct <= cn + 1e-6)/300
+it <- 0; inn <- 0; ssd <- TRUE
+for (i in 1:300) { it <- it + ct[i]*dx; inn <- inn + cn[i]*dx; if (!(it <= inn + 1e-6)) ssd <- FALSE }
+cvar <- js_sum(srt[1:250])/250
+dom_rec <- if (fsd) "Strong: treat FSD-dominates no-treat" else if (ssd) "Moderate: treat SSD-dominates (risk-averse preference)" else
+  if (js_mean(dnb) > 0) "Weak: treat has higher expected NB but no dominance" else "No dominance: no-treat preferred on expected value"
+## Decision entropy. R's reference normal CDF is stats::pnorm.
+H2 <- function(p) if (p <= 0 || p >= 1) 0 else -p*log2(p) - (1 - p)*log2(1 - p)
+p_treat <- pnorm(d/s); entropy <- H2(p_treat)
+## the page's own normalCDF formula, replayed only to explain any difference
+page_cdf <- function(z) { t <- 1/(1 + 0.3275911*abs(z))
+  y <- 1 - (((((1.061405429*t - 1.453152027)*t) + 1.421413741)*t - 0.284496736)*t + 0.254829592)*t*exp(-abs(z)*abs(z)/2)
+  0.5*(1 + sign(z + (z == 0))*y) }
+## Bayesian bootstrap: one seed-71 stream of 500 x 50,000 uniforms. Lane b is
+## replicate b, so the lanes are stepped together and each weight is used once.
+pos <- pmax(nb, 0); Sw <- numeric(500); Sp <- numeric(500); St <- numeric(500)
+xo_run(xo_starts(71, N_SIM, 500), N_SIM, function(j, u) { w <- -log(u + 1e-30)
+  Sw <<- Sw + w; Sp <<- Sp + w*pos[j]; St <<- St + w*nb[j] })
+boot <- pmax(Sp/Sw - pmax(St/Sw, 0), 0)*scale
+bmean <- js_mean(boot); bsd <- sqrt(js_sum((boot - bmean)^2)/500); bs <- sort(boot)
+bcv <- if (bmean > 1e-10) bsd/bmean else 0
+cat(sprintf("Recomputed in %.1f s.\n\n", proc.time()[["elapsed"]] - t_start))
+
+## ---- 4. compare -----------------------------------------------------------------
+rows <- list()
+near <- function(p, r) is.finite(p) && is.finite(r) && abs(p - r) <= 1e-9*max(1, abs(r))
+add <- function(section, label, pv, rv, pdisp = NULL, fmt = NULL, ref = "base-R replay") {
+  if (is.character(rv) || is.logical(rv)) { ok <- identical(as.character(pv), as.character(rv)); diff <- if (ok) "0" else "differs"
+  } else if (is.na(pv) && is.na(rv)) { ok <- TRUE; diff <- "0"
+  } else { ok <- near(pv, rv); diff <- if (is.na(pv) || is.na(rv)) "NA" else formatC(pv - rv, digits = 3, format = "g") }
+  rdisp <- NULL
+  if (!is.null(fmt)) { rdisp <- fmt(rv)
+    if (!identical(rdisp, pdisp)) {   # a value within 1e-9 of a rounding boundary may print either neighbour
+      edge <- !is.character(rv) && is.finite(rv) && (identical(fmt(rv*(1 + 1e-9)), pdisp) || identical(fmt(rv*(1 - 1e-9)), pdisp))
+      if (!edge) ok <- FALSE } }
+  show <- function(v) if (is.numeric(v)) formatC(v, digits = 12, format = "g") else as.character(v)
+  rows[[length(rows) + 1]] <<- data.frame(section = section, quantity = label, page = show(pv), R = show(rv), diff = diff,
+    page_shows = if (is.null(pdisp)) "" else pdisp, R_shows = if (is.null(rdisp)) "" else rdisp,
+    status = if (ok) "MATCH" else "MISMATCH", reference = ref, stringsAsFactors = FALSE)
+}
+pi_ <- page$inputs
+inl <- c(theta = "theta", se = "SE", tau2 = "tau2", k = "k", withinVar = "within-study variance", mcid = "MCID",
+         population = "population", horizon = "horizon (years)", costPerPatient = "cost per patient", discount = "discount rate")
+for (f in names(inl)) add("input", if (mode == "study" && f %in% c("theta", "se", "tau2", "k", "withinVar"))
+  paste(inl[[f]], "(DL from study data)") else paste0(inl[[f]], " (typed '", raw[[if (f == "costPerPatient") "cost" else f]], "')"), pi_[[f]], x[[f]])
+add("decision", "P(wrong decision)", page$pWrong, p_wrong, page$show$pWrong, fmt_pct1)
+add("decision", "GRADE certainty", page$grade, grade, page$show$grade, identity)
+add("decision", "GRADE recommendation", page$recommendation, recommendation)
+add("decision", "current optimal decision", page$decision, if (d > 0) "Treat" else "Do not treat", page$show$decision, identity)
+add("decision", "pooled effect shown", pi_$theta, th, page$show$theta, function(v) fixed(v, 4))
+add("EVPI", "discount factor", page$df, df)
+add("EVPI", "per-patient EVPI", page$evpi, evpi, page$show$evpi, fmt_cur)
+add("EVPI", "population EVPI", page$evpiPop, evpi_pop, page$show$evpiPop, fmt_cur)
+add("EVPI", "EVPPI(theta), population", page$evppiTheta*pi_$population*page$df, evppi_theta*scale, page$show$evppiTheta, fmt_cur)
+add("EVPI", "EVPPI(tau2), population", page$evppiTau2*pi_$population*page$df, evppi_tau2*scale, page$show$evppiTau2, fmt_cur)
+add("EVPI", "theta share of EVPPI", page$thetaFraction, theta_frac, page$show$thetaPct, function(v) paste0(fixed(v*100, 0), "%"))
+add("EVPI", "dominant parameter", page$dominant, dominant)
+for (i in seq_along(grid)) add("EVSI curve", paste0("EVSI(N=", fmt_num(grid[i]), "), population"), page$evsiPop[i], evsi_pop[i])
+add("EVSI", "optimal trial size N", page$optimalN, grid[best], page$show$optimalN, fmt_num)
+add("EVSI", "EVSI at optimal N", page$optEvsiPop, evsi_pop[best], page$show$optEvsiPop, fmt_cur)
+add("EVSI", "net benefit at optimal N", page$optNB, netb[best], page$show$optNB, fmt_cur)
+add("EVSI", "trial cost at optimal N", page$optCost, cost[best])
+add("EVSI", "break-even N", page$breakevenN, be, page$show$breakevenN, function(v) if (is.na(v)) "N/A" else fmt_num(v))
+add("EVSI", "verdict", page$verdict, verdict, page$show$verdict, identity)
+add("tornado", "baseline population EVPI (2,000 draws)", page$tornadoBase, t_base)
+tn <- c(theta = "Treatment Effect (theta)", tau2 = "Heterogeneity (tau2)", mcid = "MCID", population = "Population")
+for (f in names(tn)) { j <- match(tn[[f]], page$tornadoName)
+  add("tornado", paste(tn[[f]], "low - base"), page$tornadoLow[j] - page$tornadoBase, torn[[f]][1])
+  add("tornado", paste(tn[[f]], "high - base"), page$tornadoHigh[j] - page$tornadoBase, torn[[f]][2]) }
+add("dominance", "FSD holds", page$fsd, fsd, page$show$fsd, function(v) if (v) "Yes" else "No")
+add("dominance", "SSD holds", page$ssd, ssd, page$show$ssd, function(v) if (v) "Yes" else "No")
+add("dominance", "FSD share of grid", page$fsdRatio, fsd_ratio)
+add("dominance", "CVaR (5%, treat)", page$cvar, cvar, page$show$cvar, function(v) fixed(v, 4))
+add("dominance", "recommendation", page$domRec, dom_rec, page$show$domRec, identity)
+add("entropy", "P(treat optimal) = P(theta < MCID)", page$pTreat, p_treat, page$show$pTreat, fmt_pct1, "stats::pnorm")
+add("entropy", "decision entropy (bits)", page$entropy, entropy, page$show$entropy, function(v) fixed(v, 3), "stats::pnorm")
+add("entropy", "channel utilization", page$entropy, entropy, page$show$util, fmt_pct1, "stats::pnorm")
+add("bootstrap", "mean population EVPI", page$bootMean, bmean, page$show$bootMean, fmt_cur)
+add("bootstrap", "2.5% limit", page$bootLow, bs[13])
+add("bootstrap", "97.5% limit", page$bootHigh, bs[488])
+add("bootstrap", "interval as shown", page$show$bootCI, paste(fmt_cur(bs[13]), "-", fmt_cur(bs[488])))
+add("bootstrap", "CV", page$bootCv, bcv, page$show$bootCv, fmt_pct1)
+tab <- do.call(rbind, rows)
+old <- options(width = 250)
+for (sec in unique(tab$section)) {
+  cat("--", sec, "--\n"); print(tab[tab$section == sec, c("quantity", "page", "R", "diff", "page_shows", "R_shows", "status")], row.names = FALSE, right = FALSE)
+}
+options(old)
+if (any(tab$status[tab$section == "entropy"] != "MATCH")) {
+  cat("\nNote on the entropy rows: R uses stats::pnorm. The page's normalCDF applies the erf\n",
+      "coefficients of Abramowitz & Stegun 7.1.26 to exp(-z^2/2); replaying that formula in R gives\n",
+      sprintf("P(treat) = %.6f (page %.6f), so the difference is the page's formula, not its draws.\n", page_cdf(d/s), page$pTreat), sep = "")
+}
+
+## ---- 5. cross-check with independent references ---------------------------------
+cat("\n== CROSS-CHECK (closed form within 5 Monte Carlo SE; packages to 1e-9) ==\n")
+xc <- list(); nc <- character()
+xadd <- function(label, pv, rv, tol, ref) {
+  ok <- abs(pv - rv) <= tol
+  xc[[length(xc) + 1]] <<- data.frame(quantity = label, page = formatC(pv, digits = 10, format = "g"), reference = formatC(rv, digits = 10, format = "g"),
+    diff = formatC(pv - rv, digits = 3, format = "g"), tolerance = formatC(tol, digits = 3, format = "g"), status = if (ok) "MATCH" else "MISMATCH", source = ref, stringsAsFactors = FALSE) }
+cf <- function(d, s) if (s == 0) 0 else s*dnorm(d/s) + d*pnorm(d/s) - max(d, 0)
+mcse_evpi <- function(nb) sd(pmax(nb, 0) - (if (mean(nb) > 0) nb else 0))/sqrt(length(nb))
+pw_cf <- pnorm(-abs(d)/s)
+xadd("P(wrong decision)", page$pWrong, pw_cf, 5*sqrt(pw_cf*(1 - pw_cf)/N_SIM) + 1e-12, "pnorm(-|MCID-theta|/sd)")
+xadd("per-patient EVPI", page$evpi, cf(d, s), 5*mcse_evpi(nb) + 1e-12, "normal-normal closed form")
+xadd("per-patient EVPPI(theta)", page$evppiTheta, cf(d, se), 5*mcse_evpi(nbtheta) + 1e-12, "normal-normal closed form")
+for (i in seq_along(grid)) {
+  lab <- paste0("per-patient EVSI(N=", fmt_num(grid[i]), ")")
+  if (evsi_mcse[i] == 0) nc <- c(nc, paste0(lab, ": no simulated trial changes the decision (Monte Carlo SE is 0)"))
+  else xadd(lab, page$evsi[i], cf(d, sqrt(V*V/(V + x$withinVar/grid[i]))), 5*evsi_mcse[i] + 1e-12, "normal-normal closed form")
+}
+nbm <- cbind(no_treat = 0, treat = nb)
+absent <- if (identical(Sys.getenv("METAVOI_WEBR"), "1")) "not available in this WebR session (not in the WebR package repository, or its download failed)" else "not installed in this R library"
+if (suppressMessages(requireNamespace("voi", quietly = TRUE))) {
+  v <- voi::evpi(nbm); if (is.data.frame(v)) v <- v$evpi
+  xadd("per-patient EVPI", page$evpi, as.numeric(v), 1e-9, paste0("voi::evpi ", utils::packageVersion("voi"), " on the replayed draws"))
+} else nc <- c(nc, paste("voi::evpi: package voi is", absent))
+if (suppressMessages(requireNamespace("BCEA", quietly = TRUE))) {
+  b <- tryCatch(suppressMessages(BCEA::bcea(eff = nbm, cost = matrix(0, nrow(nbm), 2), ref = 1, k = c(0, 1), plot = FALSE)), error = function(e) e)
+  if (inherits(b, "error")) nc <- c(nc, paste("BCEA::bcea failed:", conditionMessage(b))) else
+    xadd("per-patient EVPI", page$evpi, as.numeric(b$evi[which(b$k == 1)]), 1e-9, paste0("BCEA::bcea ", utils::packageVersion("BCEA"), " EVPI at k = 1"))
+} else nc <- c(nc, paste("BCEA::bcea: package BCEA is", absent))
+if (mode == "study") {
+  if (requireNamespace("metafor", quietly = TRUE)) {
+    fit <- metafor::rma(yi = yi, vi = vi, method = "DL")
+    src <- paste0("metafor::rma(method='DL') ", utils::packageVersion("metafor"))
+    xadd("theta (DL)", pi_$theta, as.numeric(fit$b), 1e-9*max(1, abs(fit$b)), src)
+    xadd("SE (DL)", pi_$se, fit$se, 1e-9, src); xadd("tau2 (DL)", pi_$tau2, fit$tau2, 1e-9, src)
+  } else nc <- c(nc, paste("metafor::rma: package metafor is", absent))
+}
+xt <- do.call(rbind, xc)
+old <- options(width = 250); print(xt, row.names = FALSE, right = FALSE); options(old)
+if (length(nc)) cat(paste0("NOT CHECKED: ", nc, "\n"), sep = "")
+
+## ---- 6. verdict -------------------------------------------------------------------
+bad <- tab$status != "MATCH"; xbad <- xt$status != "MATCH"
+cat("\n")
+if (any(bad)) cat(sprintf("RESULT: MISMATCH %d of %d page values (%s)\n", sum(bad), nrow(tab), paste(tab$quantity[bad], collapse = "; "))) else
+  cat(sprintf("RESULT: MATCH %d/%d page values\n", nrow(tab), nrow(tab)))
+cat(sprintf("CROSS-CHECK: %s %d/%d%s\n", if (any(xbad)) "MISMATCH" else "MATCH", sum(!xbad), nrow(xt),
+            if (length(nc)) sprintf("; NOT CHECKED %d (listed above)", length(nc)) else ""))
+if (!identical(Sys.getenv("METAVOI_WEBR"), "1") && !interactive()) quit(status = if (any(bad) || any(xbad)) 1 else 0)
+</script>
 <script>
 /* ========================================================================
    MetaVoI Engine - Value of Information from Meta-Analysis
@@ -1464,6 +1798,7 @@ body.dark .js-plotly-plot .plotly .modebar-btn path { fill: var(--muted); }
 
   async function runAnalysis() {
     const inputs = gatherInputs();
+    const rawInputs = readRawInputs();
     if (inputs.error) {
       announce(inputs.error);
       alert(inputs.error);
@@ -1512,7 +1847,7 @@ body.dark .js-plotly-plot .plotly .modebar-btn path { fill: var(--muted); }
       inputs: { theta, se, tau2, k, withinVar, mcid, population, horizon, costPerPatient, discount },
       draws, pWrong, grade, df, evpi, evpiPop, evppi, evsiCurve, optimal,
       nbTreat, nbNoTreat, currentDecision, inputHash,
-      sensitivityData, dominanceData, entropyData, bootstrapData,
+      sensitivityData, dominanceData, entropyData, bootstrapData, rawInputs,
       timestamp: new Date().toISOString()
     };
 
@@ -2368,6 +2703,178 @@ body.dark .js-plotly-plot .plotly .modebar-btn path { fill: var(--muted); }
     }
     document.body.removeChild(ta);
   }
+
+  // -------------------------------------------------------------------
+  // 9. Verify in R: generated script (download) and the same script in WebR
+  //    The R code lives in the text/plain block with id "metavoi-r-template".
+  // -------------------------------------------------------------------
+  const WEBR_BASE = "https://webr.r-wasm.org/v0.5.5/";
+
+  function readRawInputs() {
+    const v = function(id) { return document.getElementById(id).value; };
+    return {
+      mode: inputToggle.classList.contains("on") ? "study" : "summary",
+      theta: v("inp-theta"), se: v("inp-se"), tau2: v("inp-tau2"), k: v("inp-k"), withinVar: v("inp-within-var"),
+      mcid: v("inp-mcid"), population: v("inp-pop"), horizon: v("inp-horizon"), cost: v("inp-cost"), discount: v("inp-discount"),
+      studydata: v("inp-studydata")
+    };
+  }
+
+  function rLit(v) {
+    if (v === null || v === undefined) return "NA";
+    if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+    if (typeof v === "number") return Number.isFinite(v) ? String(v) : "NA";
+    return JSON.stringify(String(v));
+  }
+  function rObj(o, ind) {
+    ind = ind || "  ";
+    return "list(\n" + Object.keys(o).map(function(key) {
+      const val = o[key];
+      let lit;
+      if (Array.isArray(val)) lit = "c(" + val.map(rLit).join(", ") + ")";
+      else if (val !== null && typeof val === "object") lit = rObj(val, ind + "  ");
+      else lit = rLit(val);
+      return ind + key + " = " + lit;
+    }).join(",\n") + ")";
+  }
+
+  // The value a stat card shows, read from the page as rendered
+  function cardShows(containerId, label) {
+    const cards = document.getElementById(containerId).querySelectorAll(".stat-card");
+    for (let i = 0; i < cards.length; i++) {
+      const lab = cards[i].querySelector(".stat-label");
+      if (lab && lab.textContent === label) return cards[i].firstElementChild.textContent;
+    }
+    return null;
+  }
+
+  function buildVerifyScript() {
+    const r = lastResults;
+    const raw = r.rawInputs;
+    const o = r.optimal;
+    const t = r.sensitivityData.tornado;
+    const verdictEl = document.querySelector("#evsi-verdict .verdict-title");
+    const evppiText = document.getElementById("evppi-text").textContent;
+    const page = {
+      timestamp: r.timestamp, inputHash: r.inputHash, inputs: r.inputs,
+      pWrong: r.pWrong, grade: r.grade.certainty, recommendation: r.grade.recommendation, decision: r.currentDecision,
+      df: r.df, evpi: r.evpi, evpiPop: r.evpiPop,
+      evppiTheta: r.evppi.theta, evppiTau2: r.evppi.tau2, thetaFraction: r.evppi.thetaFraction, dominant: r.evppi.dominant,
+      evsi: r.evsiCurve.map(function(c) { return c.evsi; }), evsiPop: r.evsiCurve.map(function(c) { return c.evsiPop; }),
+      optimalN: o.optimalN, optEvsiPop: o.evsiPop, optNB: o.netBenefit, optCost: o.cost, breakevenN: o.breakevenN,
+      verdict: verdictEl ? verdictEl.textContent : null,
+      tornadoName: t.map(function(e) { return e.name; }), tornadoLow: t.map(function(e) { return e.low; }),
+      tornadoHigh: t.map(function(e) { return e.high; }), tornadoBase: r.sensitivityData.baseEvpi,
+      fsd: r.dominanceData.fsdHolds, ssd: r.dominanceData.ssdHolds, fsdRatio: r.dominanceData.fsdRatio,
+      cvar: r.dominanceData.cvarTreat, domRec: r.dominanceData.recommendation,
+      pTreat: r.entropyData.pTreat, entropy: r.entropyData.decisionEntropy,
+      bootMean: r.bootstrapData.mean, bootLow: r.bootstrapData.ciLow, bootHigh: r.bootstrapData.ciHigh, bootCv: r.bootstrapData.cv,
+      show: {
+        pWrong: cardShows("decision-stats", "P(Wrong Decision)"), grade: cardShows("decision-stats", "GRADE Certainty"),
+        decision: cardShows("decision-stats", "Current Optimal Decision"), theta: cardShows("decision-stats", "Pooled Effect (theta)"),
+        evpiPop: cardShows("evpi-stats", "Population EVPI"), evpi: cardShows("evpi-stats", "Per-Patient EVPI"),
+        evppiTheta: cardShows("evpi-stats", "EVPPI (theta)"), evppiTau2: cardShows("evpi-stats", "EVPPI (tau2)"),
+        thetaPct: evppiText.split(" ")[0],
+        optimalN: cardShows("evsi-stats", "Optimal Trial Size (N)"), optEvsiPop: cardShows("evsi-stats", "EVSI at Optimal N"),
+        optNB: cardShows("evsi-stats", "Net Benefit at Optimal N"), breakevenN: cardShows("evsi-stats", "Break-Even N"),
+        verdict: verdictEl ? verdictEl.textContent : null,
+        fsd: cardShows("dominance-stats", "FSD Holds"), ssd: cardShows("dominance-stats", "SSD Holds"),
+        cvar: cardShows("dominance-stats", "CVaR (5% Treat)"), domRec: cardShows("dominance-stats", "Recommendation"),
+        entropy: cardShows("entropy-stats", "Decision Entropy (bits)"), util: cardShows("entropy-stats", "Channel Utilization"),
+        pTreat: cardShows("entropy-stats", "P(Treat Optimal)"),
+        bootMean: cardShows("bootstrap-stats", "Mean EVPI (Pop)"), bootCI: cardShows("bootstrap-stats", "95% Credible Interval"),
+        bootCv: cardShows("bootstrap-stats", "CV (Reliability)")
+      }
+    };
+    const rawR = {
+      theta: raw.theta, se: raw.se, tau2: raw.tau2, k: raw.k, withinVar: raw.withinVar,
+      mcid: raw.mcid, population: raw.population, horizon: raw.horizon, cost: raw.cost, discount: raw.discount
+    };
+    const header = [
+      "## MetaVoI -- R verification script, written by the page (app/metavoi.html, MetaVoI v1.0)",
+      "## from the last 'Compute VoI' (" + r.timestamp + ").",
+      "## mode: summary = the typed theta/SE/tau2; study = the pasted yi, vi lines (pooled by DerSimonian-Laird).",
+      "mode <- " + rLit(raw.mode),
+      "## inputs exactly as typed in the page's fields",
+      "raw <- " + rObj(rawR),
+      "studydata <- " + rLit(raw.mode === "study" ? raw.studydata : ""),
+      "## the page's results at full precision ('show' = text the page displays)",
+      "page <- " + rObj(page),
+      ""
+    ].join("\n");
+    return header + document.getElementById("metavoi-r-template").textContent;
+  }
+
+  function downloadRScript() {
+    const out = document.getElementById("r-verify-out");
+    if (!lastResults) { out.textContent = "Run Compute VoI first; the script carries the page's inputs and results."; return; }
+    const blob = new Blob([buildVerifyScript()], { type: "text/x-r;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "metavoi-verify.R";
+    document.body.appendChild(a); a.click();
+    setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
+    announce("R script downloaded.");
+  }
+
+  let webRPromise = null;
+  function getWebR(status) {
+    if (!webRPromise) {
+      webRPromise = (async function() {
+        status("Loading WebR " + WEBR_BASE + " (one-time download, about 30 MB)...");
+        const mod = await import(WEBR_BASE + "webr.mjs");
+        const w = new mod.WebR({ baseUrl: WEBR_BASE, interactive: false });
+        await w.init();
+        return w;
+      })();
+      webRPromise.catch(function() { webRPromise = null; });
+    }
+    return webRPromise;
+  }
+
+  let verifyRunning = false;
+  async function verifyInR() {
+    const out = document.getElementById("r-verify-out");
+    if (!lastResults) { out.textContent = "Run Compute VoI first."; return; }
+    if (verifyRunning) return;
+    verifyRunning = true;
+    const btn = document.getElementById("btnVerifyR");
+    btn.disabled = true;
+    const status = function(msg) { out.textContent = msg; announce(msg); };
+    const script = buildVerifyScript();
+    const notes = [];
+    try {
+      const webR = await getWebR(status);
+      if (document.getElementById("chkVerifyPkgs").checked) {
+        const pkgs = lastResults.rawInputs.mode === "study" ? ["voi", "BCEA", "metafor"] : ["voi", "BCEA"];
+        for (let i = 0; i < pkgs.length; i++) {
+          status("Installing " + pkgs[i] + " from the WebR package repository...");
+          try { await webR.installPackages([pkgs[i]], { quiet: true }); }
+          catch (e) { notes.push("WebR could not install " + pkgs[i] + ": " + (e && e.message ? e.message : e)); }
+        }
+      }
+      status("Running the R script in WebR (about a minute)...");
+      const shelter = await new webR.Shelter();
+      try {
+        const res = await shelter.captureR('Sys.setenv(METAVOI_WEBR = "1")\n' + script, { withAutoprint: true, captureStreams: true, captureConditions: false });
+        const text = res.output.filter(function(m) { return m.type === "stdout" || m.type === "stderr"; })
+          .map(function(m) { return m.data; }).join("\n");
+        out.textContent = (notes.length ? notes.join("\n") + "\n\n" : "") + text;
+        const verdict = text.split("\n").filter(function(l) { return l.indexOf("RESULT:") === 0; })[0];
+        announce(verdict || "R run finished without a RESULT line.");
+      } finally {
+        shelter.purge();
+      }
+    } catch (e) {
+      out.textContent = (notes.length ? notes.join("\n") + "\n" : "") + "NOT CHECKED: the R run did not complete: " + (e && e.message ? e.message : e);
+    } finally {
+      verifyRunning = false;
+      btn.disabled = false;
+    }
+  }
+
+  document.getElementById("btnDownloadR").addEventListener("click", downloadRScript);
+  document.getElementById("btnVerifyR").addEventListener("click", verifyInR);
 
   function announce(msg) {
     const el = document.getElementById("liveRegion");
